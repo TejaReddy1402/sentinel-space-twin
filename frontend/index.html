@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentinel Space Twin — Data Engine v2</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root{
+      --bg:#070b13; --panel:#0d1422; --panel2:#111b2c; --line:#263852; --text:#eef5ff;
+      --muted:#95a8c3; --blue:#6bbcff; --green:#36d399; --amber:#f5b64c; --red:#ff6b7a;
+      --purple:#9c7cff; --shadow: 0 22px 80px rgba(0,0,0,.38);
+    }
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 45% -20%,#163a63 0,#07111f 38%,var(--bg) 100%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
+    .app{height:100vh;display:grid;grid-template-rows:74px 1fr;gap:14px;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between;background:rgba(12,20,34,.78);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:22px;padding:14px 18px;backdrop-filter:blur(18px)}
+    .brand{display:flex;align-items:center;gap:14px}.logo{width:40px;height:40px;border-radius:14px;background:linear-gradient(135deg,var(--blue),var(--purple));box-shadow:0 0 30px rgba(107,188,255,.35)}
+    h1{font-size:21px;margin:0;letter-spacing:-.02em}.subtitle{font-size:12px;color:var(--muted);margin-top:2px}.chips{display:flex;gap:8px;flex-wrap:wrap}.chip{font-size:11px;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);background:#0b1728;border-radius:999px;padding:8px 10px;color:#c8d9ef}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:7px}.dot.warn{background:var(--amber)}
+    main{display:grid;grid-template-columns:330px minmax(520px,1fr) 420px;gap:14px;min-height:0}.panel{background:rgba(13,20,34,.86);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);min-height:0;overflow:hidden}.panel-inner{padding:18px}.section-title{font-weight:760;font-size:15px;margin:0 0 12px}.hint{color:var(--muted);font-size:12px;line-height:1.55}.control{margin-bottom:14px}.label{font-size:11px;color:#b8c8df;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}.select,.input{width:100%;border:1px solid var(--line);background:#0a1220;color:var(--text);border-radius:13px;padding:11px 12px;outline:none}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.btn{width:100%;border:0;border-radius:15px;padding:12px 14px;background:linear-gradient(135deg,#2386d8,#7a62ff);color:white;font-weight:760;cursor:pointer;box-shadow:0 12px 36px rgba(73,127,255,.25)}.btn:disabled{opacity:.55;cursor:not-allowed}.small-btn{border:1px solid var(--line);background:#0a1220;color:#cfe0f6;border-radius:12px;padding:9px 10px;cursor:pointer}.metric{background:#0a1220;border:1px solid var(--line);border-radius:16px;padding:12px}.metric .k{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.08em}.metric .v{font-size:21px;font-weight:800;margin-top:4px}.score.strong{color:var(--green)}.score.usable{color:var(--blue)}.score.weak{color:var(--amber)}.score.poor{color:var(--red)}
+    #map{height:100%;width:100%;background:#07101d}.map-wrap{position:relative;min-height:0}.floating{position:absolute;z-index:500;background:rgba(7,13,24,.78);border:1px solid var(--line);border-radius:16px;padding:12px;backdrop-filter:blur(10px)}.legend{left:16px;bottom:16px;width:300px}.legend-row{display:flex;align-items:center;gap:8px;font-size:12px;color:#d9e7f8;margin-top:7px}.sw{width:14px;height:14px;border-radius:4px}.sw.aoi{border:2px solid var(--blue)}.sw.change{background:rgba(255,185,64,.75)}.sw.scene{border:2px solid var(--green)}.map-status{right:16px;top:16px;max-width:300px}.map-status b{color:#fff}.map-status div{font-size:12px;color:var(--muted);line-height:1.45;margin-top:4px}
+    .right{display:grid;grid-template-rows:auto 1fr;min-height:0}.tabs{display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--line)}.tab{flex:1;border:1px solid var(--line);background:#0a1220;color:#cfe0f6;border-radius:13px;padding:9px;font-size:12px;cursor:pointer}.tab.active{background:#173452;border-color:#3e8fd2;color:white}.tab-body{overflow:auto}.scene-images{display:grid;grid-template-columns:1fr 1fr;gap:10px}.img-card{border:1px solid var(--line);background:#0a1220;border-radius:17px;overflow:hidden}.img-card img{width:100%;height:130px;object-fit:cover;background:#07101c;display:block}.img-title{padding:10px;font-size:12px;color:#d7e6f8}.empty-img{height:130px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;background:repeating-linear-gradient(135deg,#0a1220,#0a1220 8px,#0e1a2c 8px,#0e1a2c 16px)}.cards{display:grid;gap:10px}.evidence-card{border:1px solid var(--line);background:#0a1220;border-radius:17px;padding:13px}.evidence-card h3{font-size:13px;margin:0 0 8px;color:#fff}.evidence-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}.pill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:5px 8px;font-size:11px;color:#cfe0f6;margin:4px 4px 0 0}.pill.green{border-color:rgba(54,211,153,.4);color:#b8f5dd}.pill.amber{border-color:rgba(245,182,76,.45);color:#ffe0a8}.pill.red{border-color:rgba(255,107,122,.45);color:#ffc0c7}.asset-list{max-height:200px;overflow:auto}.asset{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(255,255,255,.05);padding:7px 0;font-size:12px}.asset a{color:var(--blue);text-decoration:none}.code{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:#07101d;border:1px solid var(--line);border-radius:14px;padding:12px;color:#b9d7ff;font-size:11px;line-height:1.5;max-height:280px;overflow:auto}.loader{display:none;margin:10px 0;color:var(--blue);font-size:13px}.loader.on{display:block}.bar{height:8px;border-radius:999px;background:#0a1220;overflow:hidden;border:1px solid var(--line);margin-top:8px}.bar span{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--blue));width:0%}.scene-list{max-height:220px;overflow:auto}.scene-row{display:grid;grid-template-columns:44px 1fr 52px;gap:8px;align-items:center;border-bottom:1px solid rgba(255,255,255,.06);padding:9px 0}.thumb{width:44px;height:34px;border-radius:8px;background:#0a1220;object-fit:cover}.date{font-size:12px;color:#e7f2ff}.sub{font-size:11px;color:var(--muted);margin-top:2px}.cloud{font-size:11px;color:#d5e4f5;text-align:right}.warning{border:1px solid rgba(245,182,76,.35);background:rgba(245,182,76,.08);border-radius:14px;padding:10px;color:#ffe5b7;font-size:12px;line-height:1.45;margin-top:10px}
+    @media(max-width:1100px){body{overflow:auto}.app{height:auto}main{grid-template-columns:1fr}.map-wrap{height:560px}.right{min-height:700px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand"><div class="logo"></div><div><h1>Sentinel Space Twin — Data Engine v2</h1><div class="subtitle">Evidence-first viewer: scene quality, before/after, change overlays, visibility limits, VLM packet.</div></div></div>
+      <div class="chips"><div class="chip"><span class="dot"></span>STAC</div><div class="chip"><span class="dot"></span>Sentinel-2</div><div class="chip"><span class="dot warn"></span>Preview change now</div><div class="chip"><span class="dot warn"></span>Band processing next</div></div>
+    </header>
+    <main>
+      <section class="panel"><div class="panel-inner">
+        <p class="section-title">1. Choose AOI</p>
+        <div class="control"><div class="label">Preset</div><select id="preset" class="select"></select></div>
+        <div class="control"><div class="label">BBox [minLon,minLat,maxLon,maxLat]</div><input id="bbox" class="input" /></div>
+        <div class="grid2">
+          <div class="control"><div class="label">Days back</div><input id="days" class="input" type="number" value="90" /></div>
+          <div class="control"><div class="label">Max cloud %</div><input id="cloud" class="input" type="number" value="40" /></div>
+        </div>
+        <button id="run" class="btn">Run data enhancement</button>
+        <div id="loading" class="loader">Fetching scenes, scoring data and building change layer…</div>
+        <div id="error" class="warning" style="display:none"></div>
+        <div class="warning">This UI is data-first. A shiny 3D globe is not the point; the point is evidence, freshness, confidence and what is actually visible.</div>
+        <p class="section-title" style="margin-top:18px">2. Quality summary</p>
+        <div class="grid2">
+          <div class="metric"><div class="k">Scenes found</div><div id="sceneCount" class="v">—</div></div>
+          <div class="metric"><div class="k">Best score</div><div id="bestScore" class="v score">—</div></div>
+        </div>
+        <div class="metric" style="margin-top:10px"><div class="k">Change status</div><div id="changeStatus" class="v" style="font-size:15px;line-height:1.4">—</div></div>
+        <p class="section-title" style="margin-top:18px">3. Candidate scenes</p>
+        <div id="sceneList" class="scene-list hint">Run an analysis to load real scene candidates.</div>
+      </div></section>
+
+      <section class="panel map-wrap">
+        <div id="map"></div>
+        <div class="floating map-status"><b id="mapTitle">No AOI loaded</b><div id="mapDesc">Run data enhancement to draw AOI, scene footprints and change cells.</div></div>
+        <div class="floating legend">
+          <b>Map evidence</b>
+          <div class="legend-row"><span class="sw aoi"></span> AOI searched</div>
+          <div class="legend-row"><span class="sw scene"></span> Satellite scene footprint</div>
+          <div class="legend-row"><span class="sw change"></span> Preview-level changed cells</div>
+        </div>
+      </section>
+
+      <section class="panel right">
+        <div class="tabs"><button class="tab active" data-tab="evidence">Evidence</button><button class="tab" data-tab="visibility">Visibility</button><button class="tab" data-tab="vlm">VLM Packet</button></div>
+        <div class="tab-body panel-inner">
+          <div id="tab-evidence" class="tab-content">
+            <p class="section-title">Before / after evidence</p>
+            <div class="scene-images">
+              <div class="img-card"><div id="prevImg" class="empty-img">Previous scene</div><div id="prevTitle" class="img-title">—</div></div>
+              <div class="img-card"><div id="latestImg" class="empty-img">Latest scene</div><div id="latestTitle" class="img-title">—</div></div>
+            </div>
+            <p class="section-title" style="margin-top:16px">Change preview</p>
+            <div class="img-card"><div id="changeImg" class="empty-img">Change image generated by backend appears here</div><div id="changeTitle" class="img-title">—</div></div>
+            <p class="section-title" style="margin-top:16px">Processing indices</p>
+            <div id="indices" class="cards"></div>
+          </div>
+          <div id="tab-visibility" class="tab-content" style="display:none">
+            <p class="section-title">Visibility matrix</p>
+            <div id="visibility" class="cards"></div>
+            <p class="section-title" style="margin-top:16px">Asset provenance</p>
+            <div id="assets" class="asset-list"></div>
+          </div>
+          <div id="tab-vlm" class="tab-content" style="display:none">
+            <p class="section-title">VLM / LLM input packet</p>
+            <div class="hint" style="margin-bottom:10px">This is what should be passed to Qwen2.5-VL / InternVL / LLaVA-style model. The VLM explains evidence; it should not invent resolution.</div>
+            <div id="vlmPacket" class="code">Run analysis first.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+const API = localStorage.getItem('SST_API') || 'http://localhost:8787';
+const presets = {
+  rotterdam_port: {name:'Rotterdam Port', bbox:[3.90,51.82,4.65,52.08]},
+  london_gateway: {name:'London Gateway Port', bbox:[0.35,51.44,0.58,51.55]},
+  heathrow: {name:'London Heathrow', bbox:[-0.55,51.42,-0.36,51.51]},
+  mumbai_port: {name:'Mumbai Port', bbox:[72.78,18.88,72.93,19.05]},
+  singapore_port: {name:'Singapore Port', bbox:[103.60,1.15,104.05,1.38]}
+};
+
+const map = L.map('map', { zoomControl:false }).setView([51.95,4.3], 10);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap' }).addTo(map);
+let aoiLayer, sceneLayer, changeLayer;
+
+function $(id){ return document.getElementById(id); }
+function fmtDate(s){ return s ? new Date(s).toLocaleString() : '—'; }
+function thumb(scene){ return scene?.assets?.thumbnail || scene?.assets?.rendered_preview || scene?.assets?.overview || null; }
+function imgHtml(url, label){ return url ? `<img src="${url}" alt="${label}" referrerpolicy="no-referrer"/>` : `<div class="empty-img">No renderable preview</div>`; }
+function bboxCenter(b){ return [(b[1]+b[3])/2, (b[0]+b[2])/2]; }
+function bboxBounds(b){ return [[b[1],b[0]],[b[3],b[2]]]; }
+
+function initPresets(){
+  const select = $('preset');
+  select.innerHTML = Object.entries(presets).map(([k,p])=>`<option value="${k}">${p.name}</option>`).join('');
+  select.addEventListener('change', ()=>{$('bbox').value = presets[select.value].bbox.join(',');});
+  $('bbox').value = presets.rotterdam_port.bbox.join(',');
+}
+initPresets();
+
+function clearLayers(){ [aoiLayer, sceneLayer, changeLayer].forEach(l=>{ if(l) map.removeLayer(l); }); }
+function drawResult(data){
+  clearLayers();
+  const b = data.aoi.bbox;
+  aoiLayer = L.rectangle(bboxBounds(b), {color:'#6bbcff', weight:2, fill:false}).addTo(map);
+  const sceneGeo = [];
+  for(const s of [data.selected.latest, data.selected.previous]){
+    if(s?.geometry) sceneGeo.push({type:'Feature', properties:{id:s.id}, geometry:s.geometry});
+  }
+  sceneLayer = L.geoJSON({type:'FeatureCollection',features:sceneGeo}, {style:{color:'#36d399', weight:1.5, fill:false}}).addTo(map);
+  const c = data.change?.geojson;
+  changeLayer = L.geoJSON(c, {style:f=>({color:'#f5b64c', fillColor:'#f5b64c', weight:1, fillOpacity: Math.min(0.65, 0.25+(f.properties.change_score||0)*0.7)})}).addTo(map);
+  map.fitBounds(bboxBounds(b), {padding:[40,40]});
+  $('mapTitle').textContent = data.aoi.name;
+  $('mapDesc').textContent = `${data.scene_count} scenes found. ${data.change.summary || ''}`;
+}
+
+function renderSceneList(scenes){
+  if(!scenes?.length){ $('sceneList').innerHTML = '<div class="hint">No scenes returned.</div>'; return; }
+  $('sceneList').innerHTML = scenes.map(s=>`
+    <div class="scene-row">
+      ${thumb(s) ? `<img class="thumb" src="${thumb(s)}" referrerpolicy="no-referrer"/>` : '<div class="thumb"></div>'}
+      <div><div class="date">${fmtDate(s.datetime)}</div><div class="sub">${s.platform || 'sentinel'} · ${s.quality_label}</div></div>
+      <div class="cloud">${Number(s.cloud_cover ?? 0).toFixed(1)}% cloud<br>${s.quality_score}</div>
+    </div>`).join('');
+}
+
+function renderEvidence(data){
+  const latest = data.selected.latest, prev = data.selected.previous;
+  $('prevImg').outerHTML = `<div id="prevImg">${imgHtml(thumb(prev), 'previous')}</div>`;
+  $('latestImg').outerHTML = `<div id="latestImg">${imgHtml(thumb(latest), 'latest')}</div>`;
+  $('prevTitle').textContent = prev ? `${fmtDate(prev.datetime)} · score ${prev.quality_score} · cloud ${Number(prev.cloud_cover||0).toFixed(1)}%` : 'No previous scene';
+  $('latestTitle').textContent = latest ? `${fmtDate(latest.datetime)} · score ${latest.quality_score} · cloud ${Number(latest.cloud_cover||0).toFixed(1)}%` : 'No latest scene';
+  $('changeImg').outerHTML = `<div id="changeImg">${data.change.image_url ? `<img src="${data.change.image_url}"/>` : '<div class="empty-img">No change preview image</div>'}</div>`;
+  $('changeTitle').textContent = data.change.summary || '—';
+  $('indices').innerHTML = data.indices.map(i=>`<div class="evidence-card"><h3>${i.name}</h3><p><b>Formula:</b> ${i.formula}</p><p><b>Meaning:</b> ${i.meaning}</p></div>`).join('');
+}
+
+function renderVisibility(data){
+  $('visibility').innerHTML = data.visibility_matrix.map(v=>{
+    const cls = v.class.includes('not') ? 'red' : v.class.includes('external') ? 'amber' : v.class.includes('infer') ? 'amber' : 'green';
+    return `<div class="evidence-card"><h3>${v.class.replaceAll('_',' ')}</h3><div>${v.items.map(x=>`<span class="pill ${cls}">${x}</span>`).join('')}</div></div>`;
+  }).join('');
+  const latest = data.selected.latest;
+  const assets = latest?.assets || {};
+  $('assets').innerHTML = Object.entries(assets).slice(0,40).map(([k,v])=>`<div class="asset"><span>${k}</span><a href="${v}" target="_blank">open</a></div>`).join('') || '<div class="hint">No assets.</div>';
+}
+
+function renderSummary(data){
+  $('sceneCount').textContent = data.scene_count;
+  const latest = data.selected.latest;
+  $('bestScore').textContent = latest ? latest.quality_score : '—';
+  $('bestScore').className = `v score ${latest?.quality_label || ''}`;
+  $('changeStatus').textContent = data.change.status + ' — ' + (data.change.geojson?.features?.length || 0) + ' cells';
+  renderSceneList(data.scenes);
+  renderEvidence(data);
+  renderVisibility(data);
+  $('vlmPacket').textContent = JSON.stringify(data.vlm_packet, null, 2);
+}
+
+async function run(){
+  $('error').style.display = 'none'; $('loading').classList.add('on'); $('run').disabled = true;
+  try{
+    const preset = presets[$('preset').value];
+    const bbox = $('bbox').value.split(',').map(x=>Number(x.trim()));
+    if(bbox.length !== 4 || bbox.some(Number.isNaN)) throw new Error('BBox must be 4 comma-separated numbers.');
+    const res = await fetch(`${API}/api/analyze`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:preset.name, bbox, days_back:Number($('days').value), max_cloud:Number($('cloud').value), limit:14})});
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    drawResult(data); renderSummary(data);
+  }catch(e){
+    $('error').style.display = 'block';
+    $('error').textContent = `Could not run analysis: ${e.message}. Make sure backend is running at ${API}.`;
+  }finally{
+    $('loading').classList.remove('on'); $('run').disabled = false;
+  }
+}
+
+$('run').addEventListener('click', run);
+for(const t of document.querySelectorAll('.tab')){
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(x=>x.style.display='none');
+    $(`tab-${t.dataset.tab}`).style.display='block';
+  });
+}
+
+// Draw default AOI before backend run
+const b = presets.rotterdam_port.bbox;
+aoiLayer = L.rectangle(bboxBounds(b), {color:'#6bbcff', weight:2, fill:false}).addTo(map);
+map.fitBounds(bboxBounds(b));
+</script>
+</body>
+</html>
