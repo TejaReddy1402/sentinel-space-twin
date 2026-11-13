@@ -1,219 +1,683 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sentinel Space Twin — Data Engine v2</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    :root{
-      --bg:#070b13; --panel:#0d1422; --panel2:#111b2c; --line:#263852; --text:#eef5ff;
-      --muted:#95a8c3; --blue:#6bbcff; --green:#36d399; --amber:#f5b64c; --red:#ff6b7a;
-      --purple:#9c7cff; --shadow: 0 22px 80px rgba(0,0,0,.38);
-    }
-    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 45% -20%,#163a63 0,#07111f 38%,var(--bg) 100%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
-    .app{height:100vh;display:grid;grid-template-rows:74px 1fr;gap:14px;padding:16px}
-    header{display:flex;align-items:center;justify-content:space-between;background:rgba(12,20,34,.78);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:22px;padding:14px 18px;backdrop-filter:blur(18px)}
-    .brand{display:flex;align-items:center;gap:14px}.logo{width:40px;height:40px;border-radius:14px;background:linear-gradient(135deg,var(--blue),var(--purple));box-shadow:0 0 30px rgba(107,188,255,.35)}
-    h1{font-size:21px;margin:0;letter-spacing:-.02em}.subtitle{font-size:12px;color:var(--muted);margin-top:2px}.chips{display:flex;gap:8px;flex-wrap:wrap}.chip{font-size:11px;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);background:#0b1728;border-radius:999px;padding:8px 10px;color:#c8d9ef}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:7px}.dot.warn{background:var(--amber)}
-    main{display:grid;grid-template-columns:330px minmax(520px,1fr) 420px;gap:14px;min-height:0}.panel{background:rgba(13,20,34,.86);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);min-height:0;overflow:hidden}.panel-inner{padding:18px}.section-title{font-weight:760;font-size:15px;margin:0 0 12px}.hint{color:var(--muted);font-size:12px;line-height:1.55}.control{margin-bottom:14px}.label{font-size:11px;color:#b8c8df;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}.select,.input{width:100%;border:1px solid var(--line);background:#0a1220;color:var(--text);border-radius:13px;padding:11px 12px;outline:none}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.btn{width:100%;border:0;border-radius:15px;padding:12px 14px;background:linear-gradient(135deg,#2386d8,#7a62ff);color:white;font-weight:760;cursor:pointer;box-shadow:0 12px 36px rgba(73,127,255,.25)}.btn:disabled{opacity:.55;cursor:not-allowed}.small-btn{border:1px solid var(--line);background:#0a1220;color:#cfe0f6;border-radius:12px;padding:9px 10px;cursor:pointer}.metric{background:#0a1220;border:1px solid var(--line);border-radius:16px;padding:12px}.metric .k{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.08em}.metric .v{font-size:21px;font-weight:800;margin-top:4px}.score.strong{color:var(--green)}.score.usable{color:var(--blue)}.score.weak{color:var(--amber)}.score.poor{color:var(--red)}
-    #map{height:100%;width:100%;background:#07101d}.map-wrap{position:relative;min-height:0}.floating{position:absolute;z-index:500;background:rgba(7,13,24,.78);border:1px solid var(--line);border-radius:16px;padding:12px;backdrop-filter:blur(10px)}.legend{left:16px;bottom:16px;width:300px}.legend-row{display:flex;align-items:center;gap:8px;font-size:12px;color:#d9e7f8;margin-top:7px}.sw{width:14px;height:14px;border-radius:4px}.sw.aoi{border:2px solid var(--blue)}.sw.change{background:rgba(255,185,64,.75)}.sw.scene{border:2px solid var(--green)}.map-status{right:16px;top:16px;max-width:300px}.map-status b{color:#fff}.map-status div{font-size:12px;color:var(--muted);line-height:1.45;margin-top:4px}
-    .right{display:grid;grid-template-rows:auto 1fr;min-height:0}.tabs{display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--line)}.tab{flex:1;border:1px solid var(--line);background:#0a1220;color:#cfe0f6;border-radius:13px;padding:9px;font-size:12px;cursor:pointer}.tab.active{background:#173452;border-color:#3e8fd2;color:white}.tab-body{overflow:auto}.scene-images{display:grid;grid-template-columns:1fr 1fr;gap:10px}.img-card{border:1px solid var(--line);background:#0a1220;border-radius:17px;overflow:hidden}.img-card img{width:100%;height:130px;object-fit:cover;background:#07101c;display:block}.img-title{padding:10px;font-size:12px;color:#d7e6f8}.empty-img{height:130px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;background:repeating-linear-gradient(135deg,#0a1220,#0a1220 8px,#0e1a2c 8px,#0e1a2c 16px)}.cards{display:grid;gap:10px}.evidence-card{border:1px solid var(--line);background:#0a1220;border-radius:17px;padding:13px}.evidence-card h3{font-size:13px;margin:0 0 8px;color:#fff}.evidence-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}.pill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:5px 8px;font-size:11px;color:#cfe0f6;margin:4px 4px 0 0}.pill.green{border-color:rgba(54,211,153,.4);color:#b8f5dd}.pill.amber{border-color:rgba(245,182,76,.45);color:#ffe0a8}.pill.red{border-color:rgba(255,107,122,.45);color:#ffc0c7}.asset-list{max-height:200px;overflow:auto}.asset{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(255,255,255,.05);padding:7px 0;font-size:12px}.asset a{color:var(--blue);text-decoration:none}.code{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:#07101d;border:1px solid var(--line);border-radius:14px;padding:12px;color:#b9d7ff;font-size:11px;line-height:1.5;max-height:280px;overflow:auto}.loader{display:none;margin:10px 0;color:var(--blue);font-size:13px}.loader.on{display:block}.bar{height:8px;border-radius:999px;background:#0a1220;overflow:hidden;border:1px solid var(--line);margin-top:8px}.bar span{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--blue));width:0%}.scene-list{max-height:220px;overflow:auto}.scene-row{display:grid;grid-template-columns:44px 1fr 52px;gap:8px;align-items:center;border-bottom:1px solid rgba(255,255,255,.06);padding:9px 0}.thumb{width:44px;height:34px;border-radius:8px;background:#0a1220;object-fit:cover}.date{font-size:12px;color:#e7f2ff}.sub{font-size:11px;color:var(--muted);margin-top:2px}.cloud{font-size:11px;color:#d5e4f5;text-align:right}.warning{border:1px solid rgba(245,182,76,.35);background:rgba(245,182,76,.08);border-radius:14px;padding:10px;color:#ffe5b7;font-size:12px;line-height:1.45;margin-top:10px}
-    @media(max-width:1100px){body{overflow:auto}.app{height:auto}main{grid-template-columns:1fr}.map-wrap{height:560px}.right{min-height:700px}}
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Sentinel Space Twin — Data Engine v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#040c18;--sur:#07152a;--sur2:#0c1f38;--sur3:#111f33;
+  --bdr:#1a3050;--bdr2:#263d5a;
+  --txt:#e2f0ff;--txt2:#b8d0ea;--muted:#5e8aaa;
+  --acc:#0ea5e9;--acc2:#38bdf8;--acc-glow:rgba(14,165,233,.22);
+  --grn:#10d9a0;--grn-dim:rgba(16,217,160,.15);
+  --amb:#f5b64c;--amb-dim:rgba(245,182,76,.15);
+  --red:#ff4466;--red-dim:rgba(255,68,102,.15);
+  --purp:#8b5cf6;
+  --r:16px;--r-sm:10px;--nav-h:58px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;line-height:1.6;overflow-x:hidden}
+a{color:var(--acc);text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+
+/* ---- NAV ---- */
+.nav{position:sticky;top:0;z-index:1000;height:var(--nav-h);background:rgba(4,12,24,.96);backdrop-filter:blur(18px);border-bottom:1px solid var(--bdr)}
+.nav-inner{max-width:1400px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:100%}
+.nav-brand{font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--txt);display:flex;align-items:center;gap:9px}
+.nav-logo{width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,#0ea5e9,#8b5cf6);flex-shrink:0}
+.nav-sub{font-size:11px;font-weight:500;color:var(--muted);letter-spacing:.03em;margin-top:1px}
+.nav-links{display:flex;gap:2px}
+.nav-links a{color:var(--txt2);font-size:12px;font-weight:500;padding:6px 11px;border-radius:8px;transition:all .15s}
+.nav-links a:hover{color:var(--txt);background:var(--sur2)}
+.nav-clock{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--grn);font-variant-numeric:tabular-nums;background:var(--grn-dim);border:1px solid rgba(16,217,160,.25);border-radius:8px;padding:5px 11px}
+.dot-live{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--grn);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+
+/* ---- PAGE HEADER ---- */
+.pg-hdr{max-width:1400px;margin:0 auto;padding:22px 20px 0}
+.pg-title{font-size:clamp(18px,2.5vw,26px);font-weight:900;letter-spacing:-.025em;margin-bottom:5px}
+.pg-desc{font-size:13px;color:var(--muted);margin-bottom:14px}
+.pg-badges{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px}
+.bdg{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
+.bdg-grn{background:var(--grn-dim);color:var(--grn);border:1px solid rgba(16,217,160,.3)}
+.bdg-blue{background:rgba(14,165,233,.12);color:var(--acc);border:1px solid rgba(14,165,233,.3)}
+.bdg-amb{background:var(--amb-dim);color:var(--amb);border:1px solid rgba(245,182,76,.3)}
+.bdg-pur{background:rgba(139,92,246,.12);color:var(--purp);border:1px solid rgba(139,92,246,.3)}
+
+/* ---- MAIN CONTAINER ---- */
+.wrap{max-width:1400px;margin:0 auto;padding:0 20px 60px}
+.sec-hdr{margin:40px 0 18px;display:flex;align-items:center;gap:10px}
+.sec-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:var(--sur2);border:1px solid var(--bdr);border-radius:999px;padding:4px 10px}
+.sec-title{font-size:14px;font-weight:700;color:var(--txt)}
+
+/* ---- DASHBOARD ---- */
+.dashboard{display:grid;grid-template-columns:300px minmax(400px,1fr) 370px;gap:12px}
+
+/* Controls panel */
+.dp{background:rgba(5,15,30,.97);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden}
+.dp-inn{padding:16px;height:100%;overflow-y:auto;max-height:680px}
+.dp-t{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--bdr)}
+.dp-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
+.dp-sel,.dp-inp{width:100%;background:rgba(4,12,24,.8);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;font-family:inherit}
+.dp-sel:focus,.dp-inp:focus{border-color:var(--acc)}
+.dp-g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dp-row{margin-bottom:10px}
+.dp-btn{width:100%;border:none;border-radius:9px;padding:10px;background:var(--acc);color:#000;font-weight:700;font-size:13px;cursor:pointer;transition:all .18s;margin-top:4px}
+.dp-btn:hover:not(:disabled){background:var(--acc2)}
+.dp-btn:disabled{opacity:.5;cursor:not-allowed}
+.dp-metric{background:rgba(4,12,24,.7);border:1px solid var(--bdr);border-radius:9px;padding:10px 12px}
+.dp-metric .k{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.dp-metric .v{font-size:18px;font-weight:800;margin-top:2px}
+.score-strong{color:var(--grn)}.score-usable{color:var(--acc)}.score-weak{color:var(--amb)}.score-poor{color:var(--red)}
+.dp-load{display:none;font-size:11px;color:var(--acc);margin:7px 0;padding:7px 9px;background:rgba(14,165,233,.07);border-radius:7px;border:1px solid rgba(14,165,233,.2)}
+.dp-load.on{display:block}
+.dp-err{display:none;border:1px solid rgba(255,68,102,.3);background:var(--red-dim);border-radius:8px;padding:8px;font-size:11px;color:#ffb0be;margin:7px 0}
+.dp-err.on{display:block}
+.dp-warn{border:1px solid rgba(245,182,76,.2);background:rgba(245,182,76,.06);border-radius:8px;padding:8px;font-size:11px;color:#ffe4b0;margin-top:9px;line-height:1.5}
+.sc-list{max-height:190px;overflow-y:auto;margin-top:4px}
+.sc-row{display:grid;grid-template-columns:38px 1fr 48px;gap:6px;align-items:center;border-bottom:1px solid rgba(255,255,255,.05);padding:6px 0}
+.sc-thumb{width:38px;height:28px;border-radius:5px;background:var(--sur2);object-fit:cover}
+.sc-date{font-size:11px;color:var(--txt)}
+.sc-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.sc-cld{font-size:10px;color:var(--txt2);text-align:right}
+
+/* Map */
+.dash-map{position:relative;border-radius:var(--r);overflow:hidden}
+#map{height:100%;min-height:620px;background:#040e1c}
+.mover{position:absolute;z-index:500;background:rgba(4,12,24,.88);border:1px solid var(--bdr);border-radius:11px;padding:10px 13px;backdrop-filter:blur(10px)}
+.map-st{right:12px;top:12px;max-width:240px}
+.map-st b{font-size:12px;color:var(--txt)}
+.map-st div{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+.map-lg{left:12px;bottom:12px}
+.lg-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt2);margin-top:4px}
+.lg-sw{width:12px;height:12px;border-radius:3px}
+
+/* Right tabs */
+.dash-r{display:flex;flex-direction:column;min-height:0}
+.dash-tabs{display:flex;gap:6px;padding:10px;border-bottom:1px solid var(--bdr);flex-shrink:0;flex-wrap:wrap}
+.dash-tab{flex:1;min-width:60px;border:1px solid var(--bdr);background:rgba(4,12,24,.7);color:var(--txt2);border-radius:8px;padding:6px 7px;font-size:11px;font-weight:600;cursor:pointer;transition:all .18s;font-family:inherit}
+.dash-tab.active{background:rgba(14,165,233,.14);border-color:rgba(14,165,233,.4);color:var(--acc)}
+.dash-tb{flex:1;overflow-y:auto;padding:12px}
+.dtc{display:none}
+.dtc.active{display:block}
+.sc-imgs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.imgc{border:1px solid var(--bdr);background:var(--sur2);border-radius:10px;overflow:hidden}
+.imgc img{width:100%;height:100px;object-fit:cover;display:block}
+.imgc-lbl{padding:6px 8px;font-size:10px;color:var(--txt2)}
+.imgc-empty{height:100px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);background:repeating-linear-gradient(135deg,var(--sur2),var(--sur2) 8px,var(--sur3) 8px,var(--sur3) 16px)}
+.dst{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:10px 0 7px}
+.ind-card-sm{display:grid;gap:5px;border:1px solid var(--bdr);background:rgba(4,12,24,.5);border-radius:8px;padding:9px;margin-bottom:7px}
+.ind-card-sm .k{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.ind-card-sm .v{font-size:12px;color:var(--txt2)}
+
+/* Evidence record (tab) */
+.ev-id{font-size:17px;font-weight:800;color:var(--acc);letter-spacing:-.01em;margin-bottom:14px;font-family:'Inter',sans-serif}
+.ev-row{display:grid;grid-template-columns:100px 1fr;gap:4px 10px;margin-bottom:7px}
+.ev-k{font-size:11px;color:var(--muted)}.ev-v{font-size:11px;color:var(--txt2);word-break:break-all}
+.ev-seal{margin-top:14px;padding:9px 12px;background:var(--grn-dim);border:1px solid rgba(16,217,160,.3);border-radius:8px;font-size:11px;color:var(--grn)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:9px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;transition:all .18s}
+.btn-out{background:transparent;color:var(--txt);border:1px solid var(--bdr2)}
+.btn-out:hover{border-color:var(--acc);color:var(--acc)}
+.btn-sm{padding:7px 14px;font-size:12px;border-radius:8px}
+
+/* Visibility */
+.vis-pill{display:inline-flex;border:1px solid;border-radius:999px;padding:3px 8px;font-size:10px;margin:2px}
+.vp-grn{border-color:rgba(16,217,160,.4);color:var(--grn)}
+.vp-amb{border-color:rgba(245,182,76,.4);color:var(--amb)}
+.vp-red{border-color:rgba(255,68,102,.4);color:var(--red)}
+.code-blk{font-family:ui-monospace,monospace;font-size:11px;background:rgba(4,12,24,.8);border:1px solid var(--bdr);border-radius:8px;padding:10px;color:#9ed4ff;line-height:1.5;max-height:250px;overflow-y:auto;white-space:pre-wrap}
+.asset-list{max-height:140px;overflow-y:auto;margin-top:4px}
+.asset-row{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(255,255,255,.05);padding:5px 0;font-size:11px}
+.asset-row a{color:var(--acc)}
+
+/* ---- CONSTELLATION TIMELINE ---- */
+.con-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+.con-card{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);padding:18px;transition:border-color .2s}
+.con-card:hover{border-color:var(--acc)}
+.con-ctype{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.con-cname{font-size:14px;font-weight:800;color:var(--txt);margin-bottom:5px}
+.con-cres{font-size:22px;font-weight:900;color:var(--acc);margin-bottom:8px}
+.con-cdesc{font-size:12px;color:var(--txt2);line-height:1.45}
+.sar-tag{display:inline-block;background:var(--amb-dim);color:var(--amb);border:1px solid rgba(245,182,76,.4);border-radius:999px;padding:2px 8px;font-size:9px;font-weight:700;letter-spacing:.06em}
+.ctl{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);padding:20px}
+.ctl-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.ctl-aoi{font-size:10px;color:var(--muted);font-weight:600}
+.ctl-name{font-size:12px;color:var(--txt);font-weight:700}
+.ctl-filters{display:flex;gap:6px;flex-wrap:wrap}
+.ctl-fb{border:1px solid var(--bdr);background:rgba(4,12,24,.8);color:var(--txt2);border-radius:999px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s}
+.ctl-fb.active{background:var(--acc);color:#000;border-color:var(--acc)}
+.tl-wrap{position:relative;height:46px;background:rgba(4,12,24,.6);border:1px solid var(--bdr);border-radius:8px;overflow:hidden;margin:12px 0 4px}
+.tl-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-bottom:14px}
+.tl-win{position:absolute;top:7px;height:32px;border-radius:5px;cursor:pointer}
+.tl-opt{background:rgba(14,165,233,.55);border:1px solid var(--acc)}
+.tl-sar{background:rgba(245,182,76,.55);border:1px solid var(--amb)}
+.tl-now{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:2}
+.con-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+.con-m{background:rgba(4,12,24,.7);border:1px solid var(--bdr);border-radius:9px;padding:11px;text-align:center}
+.con-m .mk{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.con-m .mv{font-size:16px;font-weight:800;margin-top:4px;color:var(--txt)}
+.con-m .mv.grn{color:var(--grn)}
+.con-note{font-size:10px;color:var(--muted);margin-top:8px;text-align:center;font-style:italic}
+
+/* ---- MARITIME ---- */
+.mar-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.mar-feats{display:grid;gap:7px}
+.mf{display:flex;gap:9px;align-items:center;padding:10px 14px;background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r-sm);font-size:13px;color:var(--txt2)}
+.mf::before{content:'▸';color:var(--acc);font-size:13px;flex-shrink:0}
+.ais-panel{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);padding:18px;font-family:ui-monospace,monospace}
+.ais-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.ais-label{font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.ais-vessel{border-bottom:1px solid rgba(255,255,255,.05);padding:8px 0;display:grid;grid-template-columns:1fr auto;gap:6px}
+.ais-name{font-size:12px;color:var(--txt);font-weight:700}
+.ais-det{font-size:10px;color:var(--muted);margin-top:2px}
+.ais-sts{font-size:9px;color:var(--grn);background:var(--grn-dim);border:1px solid rgba(16,217,160,.3);border-radius:999px;padding:3px 7px;align-self:start}
+.ais-sts.amb{color:var(--amb);background:var(--amb-dim);border-color:rgba(245,182,76,.3)}
+.ais-note{font-size:10px;color:var(--muted);margin-top:10px;font-style:italic;font-family:'Inter',sans-serif}
+
+/* ---- INDUSTRIES ---- */
+.ind-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bdr);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden}
+.ind-c{background:var(--sur2);padding:20px;transition:background .2s}
+.ind-c:hover{background:var(--sur3)}
+.ind-code{font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--muted);margin-bottom:6px;font-family:ui-monospace,monospace}
+.ind-cat{font-size:10px;color:var(--acc);font-weight:600;margin-bottom:4px}
+.ind-ttl{font-size:14px;font-weight:700;color:var(--txt);margin-bottom:5px}
+.ind-desc{font-size:12px;color:var(--muted);line-height:1.45}
+
+.btn-link{background:none;border:1px solid var(--bdr);color:var(--txt2);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:8px;font-family:inherit;transition:all .18s}
+.btn-link:hover{border-color:var(--acc);color:var(--acc)}
+
+/* ---- FOOTER ---- */
+.footer{border-top:1px solid var(--bdr);padding:20px;text-align:center;font-size:11px;color:var(--muted)}
+</style>
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="brand"><div class="logo"></div><div><h1>Sentinel Space Twin — Data Engine v2</h1><div class="subtitle">Evidence-first viewer: scene quality, before/after, change overlays, visibility limits, VLM packet.</div></div></div>
-      <div class="chips"><div class="chip"><span class="dot"></span>STAC</div><div class="chip"><span class="dot"></span>Sentinel-2</div><div class="chip"><span class="dot warn"></span>Preview change now</div><div class="chip"><span class="dot warn"></span>Band processing next</div></div>
-    </header>
-    <main>
-      <section class="panel"><div class="panel-inner">
-        <p class="section-title">1. Choose AOI</p>
-        <div class="control"><div class="label">Preset</div><select id="preset" class="select"></select></div>
-        <div class="control"><div class="label">BBox [minLon,minLat,maxLon,maxLat]</div><input id="bbox" class="input" /></div>
-        <div class="grid2">
-          <div class="control"><div class="label">Days back</div><input id="days" class="input" type="number" value="90" /></div>
-          <div class="control"><div class="label">Max cloud %</div><input id="cloud" class="input" type="number" value="40" /></div>
-        </div>
-        <button id="run" class="btn">Run data enhancement</button>
-        <div id="loading" class="loader">Fetching scenes, scoring data and building change layer…</div>
-        <div id="error" class="warning" style="display:none"></div>
-        <div class="warning">This UI is data-first. A shiny 3D globe is not the point; the point is evidence, freshness, confidence and what is actually visible.</div>
-        <p class="section-title" style="margin-top:18px">2. Quality summary</p>
-        <div class="grid2">
-          <div class="metric"><div class="k">Scenes found</div><div id="sceneCount" class="v">—</div></div>
-          <div class="metric"><div class="k">Best score</div><div id="bestScore" class="v score">—</div></div>
-        </div>
-        <div class="metric" style="margin-top:10px"><div class="k">Change status</div><div id="changeStatus" class="v" style="font-size:15px;line-height:1.4">—</div></div>
-        <p class="section-title" style="margin-top:18px">3. Candidate scenes</p>
-        <div id="sceneList" class="scene-list hint">Run an analysis to load real scene candidates.</div>
-      </div></section>
 
-      <section class="panel map-wrap">
-        <div id="map"></div>
-        <div class="floating map-status"><b id="mapTitle">No AOI loaded</b><div id="mapDesc">Run data enhancement to draw AOI, scene footprints and change cells.</div></div>
-        <div class="floating legend">
-          <b>Map evidence</b>
-          <div class="legend-row"><span class="sw aoi"></span> AOI searched</div>
-          <div class="legend-row"><span class="sw scene"></span> Satellite scene footprint</div>
-          <div class="legend-row"><span class="sw change"></span> Preview-level changed cells</div>
-        </div>
-      </section>
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <div class="nav-logo"></div>
+      <div>
+        <div>Sentinel Space Twin</div>
+        <div class="nav-sub">Data Engine v2</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="#dashboard">Analysis</a>
+      <a href="#constellations">Constellations</a>
+      <a href="#maritime">Maritime</a>
+      <a href="#industries">Industries</a>
+    </div>
+    <div class="nav-clock"><span class="dot-live"></span><span id="navClock">00:00:00</span> UTC</div>
+  </div>
+</nav>
 
-      <section class="panel right">
-        <div class="tabs"><button class="tab active" data-tab="evidence">Evidence</button><button class="tab" data-tab="visibility">Visibility</button><button class="tab" data-tab="vlm">VLM Packet</button></div>
-        <div class="tab-body panel-inner">
-          <div id="tab-evidence" class="tab-content">
-            <p class="section-title">Before / after evidence</p>
-            <div class="scene-images">
-              <div class="img-card"><div id="prevImg" class="empty-img">Previous scene</div><div id="prevTitle" class="img-title">—</div></div>
-              <div class="img-card"><div id="latestImg" class="empty-img">Latest scene</div><div id="latestTitle" class="img-title">—</div></div>
-            </div>
-            <p class="section-title" style="margin-top:16px">Change preview</p>
-            <div class="img-card"><div id="changeImg" class="empty-img">Change image generated by backend appears here</div><div id="changeTitle" class="img-title">—</div></div>
-            <p class="section-title" style="margin-top:16px">Processing indices</p>
-            <div id="indices" class="cards"></div>
+<!-- PAGE HEADER -->
+<div class="pg-hdr">
+  <div class="pg-title">Sentinel Space Twin — Data Engine v2</div>
+  <div class="pg-desc">Evidence-first viewer: scene quality, before/after, change overlays, visibility limits, VLM packet, chain of custody &amp; collection windows.</div>
+  <div class="pg-badges">
+    <span class="bdg bdg-grn"><span class="dot-live"></span>STAC Live</span>
+    <span class="bdg bdg-blue">Sentinel-2 L2A</span>
+    <span class="bdg bdg-amb">Preview Change</span>
+    <span class="bdg bdg-pur">Band Processing</span>
+    <span class="bdg bdg-blue">SHA-256 Sealed</span>
+    <span class="bdg bdg-grn">Multi-Constellation</span>
+  </div>
+</div>
+
+<!-- MAIN WRAP -->
+<div class="wrap">
+
+  <!-- ============ ANALYSIS DASHBOARD ============ -->
+  <section id="dashboard">
+    <div class="dashboard">
+
+      <!-- Left: Controls -->
+      <div class="dp">
+        <div class="dp-inn">
+          <div class="dp-t">1. Choose AOI</div>
+
+          <div class="dp-row"><div class="dp-lbl">Preset</div><select id="preset" class="dp-sel"></select></div>
+          <div class="dp-row"><div class="dp-lbl">BBox [minLon,minLat,maxLon,maxLat]</div><input id="bbox" class="dp-inp"/></div>
+          <div class="dp-g2 dp-row">
+            <div><div class="dp-lbl">Days back</div><input id="days" class="dp-inp" type="number" value="90"/></div>
+            <div><div class="dp-lbl">Max cloud %</div><input id="cloud" class="dp-inp" type="number" value="40"/></div>
           </div>
-          <div id="tab-visibility" class="tab-content" style="display:none">
-            <p class="section-title">Visibility matrix</p>
-            <div id="visibility" class="cards"></div>
-            <p class="section-title" style="margin-top:16px">Asset provenance</p>
+          <button id="runBtn" class="dp-btn">▶ Run data enhancement</button>
+          <div id="dpLoad" class="dp-load">Fetching scenes, scoring data, building change layer…</div>
+          <div id="dpErr" class="dp-err"></div>
+          <div class="dp-warn">Data-first evidence viewer. A shiny 3D globe is not the point; the point is evidence, freshness, confidence and what is actually visible.</div>
+
+          <div class="dp-t" style="margin-top:16px">2. Quality summary</div>
+          <div class="dp-g2" style="margin-top:8px;gap:7px">
+            <div class="dp-metric"><div class="k">Scenes found</div><div id="sceneCount" class="v">—</div></div>
+            <div class="dp-metric"><div class="k">Best score</div><div id="bestScore" class="v">—</div></div>
+          </div>
+          <div class="dp-metric" style="margin-top:7px"><div class="k">Change status</div><div id="changeStatus" class="v" style="font-size:12px;line-height:1.4">—</div></div>
+          <div class="dp-metric" style="margin-top:7px"><div class="k">AOI code</div><div id="aoiCode" class="v" style="font-size:13px;font-family:ui-monospace,monospace">—</div></div>
+
+          <div class="dp-t" style="margin-top:16px">3. Candidate scenes</div>
+          <div id="sceneList" class="sc-list" style="color:var(--muted);font-size:11px">Run an analysis to load real scene candidates.</div>
+        </div>
+      </div>
+
+      <!-- Center: Map -->
+      <div class="dp dash-map">
+        <div id="map"></div>
+        <div class="mover map-st">
+          <b id="mapTitle">No AOI loaded</b>
+          <div id="mapDesc">Run data enhancement to draw AOI, scene footprints and change cells.</div>
+        </div>
+        <div class="mover map-lg">
+          <b style="font-size:11px">Map evidence</b>
+          <div class="lg-row"><span class="lg-sw" style="border:2px solid var(--acc)"></span>AOI searched</div>
+          <div class="lg-row"><span class="lg-sw" style="border:2px solid var(--grn)"></span>Satellite scene footprint</div>
+          <div class="lg-row"><span class="lg-sw" style="background:rgba(245,182,76,.75)"></span>Preview-level changed cells</div>
+        </div>
+      </div>
+
+      <!-- Right: Tabs -->
+      <div class="dp dash-r">
+        <div class="dash-tabs">
+          <button class="dash-tab active" data-tab="evidence">Evidence</button>
+          <button class="dash-tab" data-tab="record">Record</button>
+          <button class="dash-tab" data-tab="visibility">Visibility</button>
+          <button class="dash-tab" data-tab="vlm">VLM</button>
+        </div>
+        <div class="dash-tb">
+
+          <!-- Evidence -->
+          <div id="tab-evidence" class="dtc active">
+            <div class="dst">Before / after evidence</div>
+            <div class="sc-imgs">
+              <div class="imgc"><div id="prevImg" class="imgc-empty">Previous scene</div><div id="prevTitle" class="imgc-lbl">—</div></div>
+              <div class="imgc"><div id="latestImg" class="imgc-empty">Latest scene</div><div id="latestTitle" class="imgc-lbl">—</div></div>
+            </div>
+            <div class="dst">Change preview</div>
+            <div class="imgc"><div id="changeImg" class="imgc-empty">Change image appears here after analysis</div><div id="changeTitle" class="imgc-lbl">—</div></div>
+            <div class="dst">Processing indices</div>
+            <div id="indices"></div>
+          </div>
+
+          <!-- Chain of Custody Record -->
+          <div id="tab-record" class="dtc">
+            <div class="dst">Chain of custody — sealed evidence record</div>
+            <div id="evRecordPanel" style="color:var(--muted);font-size:11px;line-height:1.6">
+              Run an analysis to generate a SHA-256 sealed evidence record with IPX record ID, capture time, AOI code and sensor metadata.
+            </div>
+          </div>
+
+          <!-- Visibility matrix -->
+          <div id="tab-visibility" class="dtc">
+            <div class="dst">Visibility matrix</div>
+            <div id="visibility"></div>
+            <div class="dst">Asset provenance</div>
             <div id="assets" class="asset-list"></div>
           </div>
-          <div id="tab-vlm" class="tab-content" style="display:none">
-            <p class="section-title">VLM / LLM input packet</p>
-            <div class="hint" style="margin-bottom:10px">This is what should be passed to Qwen2.5-VL / InternVL / LLaVA-style model. The VLM explains evidence; it should not invent resolution.</div>
-            <div id="vlmPacket" class="code">Run analysis first.</div>
+
+          <!-- VLM packet -->
+          <div id="tab-vlm" class="dtc">
+            <div class="dst">VLM / LLM input packet</div>
+            <div style="color:var(--muted);font-size:11px;margin-bottom:8px;line-height:1.5">Input packet for Qwen2.5-VL / InternVL / LLaVA. The VLM explains evidence; it does not invent resolution.</div>
+            <div id="vlmPacket" class="code-blk">Run analysis first.</div>
           </div>
+
         </div>
-      </section>
-    </main>
-  </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONSTELLATION COLLECTION WINDOWS ============ -->
+  <section id="constellations">
+    <div class="sec-hdr">
+      <span class="sec-label">Collection windows</span>
+      <span class="sec-title">Multi-constellation coverage — next 24 h</span>
+    </div>
+
+    <div class="con-cards" id="conCards">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="ctl">
+      <div class="ctl-hdr">
+        <div>
+          <div class="ctl-aoi">Collection timeline</div>
+          <div class="ctl-name" id="ctlAoiName">Loading…</div>
+        </div>
+        <div class="ctl-filters">
+          <button class="ctl-fb active" data-filter="all">Combined</button>
+          <button class="ctl-fb" data-filter="blacksky_gen3">BlackSky Gen-3</button>
+          <button class="ctl-fb" data-filter="blacksky_gen2">BlackSky Gen-2</button>
+          <button class="ctl-fb" data-filter="pleiades">Pléiades</button>
+          <button class="ctl-fb" data-filter="iceye">ICEYE</button>
+        </div>
+      </div>
+      <div style="position:relative;height:16px">
+        <div id="tlNowLbl" style="position:absolute;font-size:9px;font-weight:800;color:var(--red);letter-spacing:.08em;transform:translateX(-50%);top:2px">NOW</div>
+      </div>
+      <div class="tl-wrap" id="tlBar"></div>
+      <div class="tl-labels">
+        <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+      </div>
+      <div class="con-metrics">
+        <div class="con-m"><div class="mk">Now (UTC)</div><div class="mv grn" id="cmNow">—</div></div>
+        <div class="con-m"><div class="mk">Next collection</div><div class="mv" id="cmNext" style="font-size:12px">—</div></div>
+        <div class="con-m"><div class="mk">24h opportunities</div><div class="mv" id="cm24h">—</div></div>
+        <div class="con-m"><div class="mk">Best resolution</div><div class="mv" id="cmBest">—</div></div>
+      </div>
+      <div class="con-note" id="ctlNote">Illustrative schedule. Real windows depend on orbit, weather and tasking priority.</div>
+    </div>
+  </section>
+
+  <!-- ============ MARITIME AIS ============ -->
+  <section id="maritime">
+    <div class="sec-hdr">
+      <span class="sec-label">Maritime AIS</span>
+      <span class="sec-title">Vessel tracking &amp; maritime domain awareness</span>
+    </div>
+    <div class="mar-layout">
+      <div class="mar-feats">
+        <div class="mf">Maritime domain awareness — live AIS identity, speed, course and route</div>
+        <div class="mf">Vessels detected and tracked in satellite imagery</div>
+        <div class="mf">Port, anchorage and chokepoint monitoring</div>
+        <div class="mf">Alerts for high-risk corridors and supply-chain disruption</div>
+        <div class="mf">Dark vessel detection via SAR when AIS is switched off</div>
+      </div>
+      <div class="ais-panel">
+        <div class="ais-hdr">
+          <div class="ais-label">AIS vessel feed</div>
+          <span class="bdg bdg-amb" style="font-size:9px;padding:3px 8px">Illustrative</span>
+        </div>
+        <div id="aisVessels">Loading vessel data…</div>
+        <div class="ais-note">Live AIS data requires integration with an AIS provider (e.g. MarineTraffic, Spire). Data shown is illustrative.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ INDUSTRIES / SECTORS ============ -->
+  <section id="industries">
+    <div class="sec-hdr">
+      <span class="sec-label">Industries monitored</span>
+      <span class="sec-title">Sectors, AOI codes &amp; persistent watch capabilities</span>
+    </div>
+    <div class="ind-grid" id="indGrid">
+      <!-- filled by JS -->
+    </div>
+  </section>
+
+</div><!-- /wrap -->
+
+<div class="footer">Sentinel Space Twin — Data Engine v2 &nbsp;·&nbsp; Powered by Sentinel-2 L2A via Element84 STAC &nbsp;·&nbsp; <span id="footClock"></span> UTC</div>
 
 <script>
-const API = localStorage.getItem('SST_API') || 'http://localhost:8787';
-const presets = {
-  rotterdam_port: {name:'Rotterdam Port', bbox:[3.90,51.82,4.65,52.08]},
-  london_gateway: {name:'London Gateway Port', bbox:[0.35,51.44,0.58,51.55]},
-  heathrow: {name:'London Heathrow', bbox:[-0.55,51.42,-0.36,51.51]},
-  mumbai_port: {name:'Mumbai Port', bbox:[72.78,18.88,72.93,19.05]},
-  singapore_port: {name:'Singapore Port', bbox:[103.60,1.15,104.05,1.38]}
-};
+const API = 'http://localhost:8787';
 
-const map = L.map('map', { zoomControl:false }).setView([51.95,4.3], 10);
-L.control.zoom({position:'bottomright'}).addTo(map);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap' }).addTo(map);
-let aoiLayer, sceneLayer, changeLayer;
-
-function $(id){ return document.getElementById(id); }
-function fmtDate(s){ return s ? new Date(s).toLocaleString() : '—'; }
-function thumb(scene){ return scene?.assets?.thumbnail || scene?.assets?.rendered_preview || scene?.assets?.overview || null; }
-function imgHtml(url, label){ return url ? `<img src="${url}" alt="${label}" referrerpolicy="no-referrer"/>` : `<div class="empty-img">No renderable preview</div>`; }
-function bboxCenter(b){ return [(b[1]+b[3])/2, (b[0]+b[2])/2]; }
-function bboxBounds(b){ return [[b[1],b[0]],[b[3],b[2]]]; }
-
-function initPresets(){
-  const select = $('preset');
-  select.innerHTML = Object.entries(presets).map(([k,p])=>`<option value="${k}">${p.name}</option>`).join('');
-  select.addEventListener('change', ()=>{$('bbox').value = presets[select.value].bbox.join(',');});
-  $('bbox').value = presets.rotterdam_port.bbox.join(',');
+/* ---- Clock ---- */
+function tickClock(){
+  const s=new Date().toUTCString().split(' ')[4];
+  document.getElementById('navClock').textContent=s;
+  const f=document.getElementById('footClock');
+  if(f)f.textContent=s;
 }
-initPresets();
+setInterval(tickClock,1000);
+tickClock();
 
-function clearLayers(){ [aoiLayer, sceneLayer, changeLayer].forEach(l=>{ if(l) map.removeLayer(l); }); }
+/* ---- Evidence record global ---- */
+let _lastRecord = null;
+
+/* ---- MAP ---- */
+const map = L.map('map',{zoomControl:false}).setView([51.95,4.3],9);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles &copy; Esri &mdash; Source: Esri, USGS, GeoEye, i-cubed, Aerogrid',maxZoom:19}).addTo(map);
+let aoiLayer,sceneLayer,changeLayer;
+
+function bb(b){return[[b[1],b[0]],[b[3],b[2]]]}
+function fmtDate(s){return s?new Date(s).toLocaleString('en-GB',{timeZone:'UTC',dateStyle:'medium',timeStyle:'short'})+' UTC':'—'}
+function pickThumb(scene){const a=scene?.assets||{};for(const k of['thumbnail','rendered_preview','overview','visual'])if(a[k])return a[k];return null}
+
+function clearLayers(){[aoiLayer,sceneLayer,changeLayer].forEach(l=>{if(l)map.removeLayer(l)})}
+
 function drawResult(data){
   clearLayers();
-  const b = data.aoi.bbox;
-  aoiLayer = L.rectangle(bboxBounds(b), {color:'#6bbcff', weight:2, fill:false}).addTo(map);
-  const sceneGeo = [];
-  for(const s of [data.selected.latest, data.selected.previous]){
-    if(s?.geometry) sceneGeo.push({type:'Feature', properties:{id:s.id}, geometry:s.geometry});
-  }
-  sceneLayer = L.geoJSON({type:'FeatureCollection',features:sceneGeo}, {style:{color:'#36d399', weight:1.5, fill:false}}).addTo(map);
-  const c = data.change?.geojson;
-  changeLayer = L.geoJSON(c, {style:f=>({color:'#f5b64c', fillColor:'#f5b64c', weight:1, fillOpacity: Math.min(0.65, 0.25+(f.properties.change_score||0)*0.7)})}).addTo(map);
-  map.fitBounds(bboxBounds(b), {padding:[40,40]});
-  $('mapTitle').textContent = data.aoi.name;
-  $('mapDesc').textContent = `${data.scene_count} scenes found. ${data.change.summary || ''}`;
+  const b=data.aoi.bbox;
+  aoiLayer=L.rectangle(bb(b),{color:'#0ea5e9',weight:2,fill:false}).addTo(map);
+  const geo=[];
+  for(const s of[data.selected.latest,data.selected.previous])if(s?.geometry)geo.push({type:'Feature',properties:{id:s.id},geometry:s.geometry});
+  sceneLayer=L.geoJSON({type:'FeatureCollection',features:geo},{style:{color:'#10d9a0',weight:1.5,fill:false}}).addTo(map);
+  changeLayer=L.geoJSON(data.change?.geojson,{style:f=>({color:'#f5b64c',fillColor:'#f5b64c',weight:1,fillOpacity:Math.min(.65,.2+(f.properties.change_score||0)*.7)})}).addTo(map);
+  map.fitBounds(bb(b),{padding:[40,40]});
+  document.getElementById('mapTitle').textContent=data.aoi.name+' ('+data.aoi.code+')';
+  document.getElementById('mapDesc').textContent=data.scene_count+' scenes found. '+(data.change.summary||'');
+}
+
+/* ---- Presets ---- */
+const presets={
+  rotterdam_port:{name:'Rotterdam Port',bbox:[3.90,51.82,4.65,52.08]},
+  london_gateway:{name:'London Gateway Port',bbox:[0.35,51.44,0.58,51.55]},
+  heathrow:{name:'London Heathrow',bbox:[-0.55,51.42,-0.36,51.51]},
+  mumbai_port:{name:'Mumbai Port',bbox:[72.78,18.88,72.93,19.05]},
+  singapore_port:{name:'Singapore Port',bbox:[103.60,1.15,104.05,1.38]}
+};
+(function initPresets(){
+  const sel=document.getElementById('preset');
+  sel.innerHTML=Object.entries(presets).map(([k,p])=>`<option value="${k}">${p.name}</option>`).join('');
+  sel.addEventListener('change',()=>{document.getElementById('bbox').value=presets[sel.value].bbox.join(',')});
+  document.getElementById('bbox').value=presets.rotterdam_port.bbox.join(',');
+  const b=presets.rotterdam_port.bbox;
+  aoiLayer=L.rectangle(bb(b),{color:'#0ea5e9',weight:2,fill:false}).addTo(map);
+  map.fitBounds(bb(b));
+})();
+
+/* ---- Analysis ---- */
+async function run(){
+  const err=document.getElementById('dpErr'),load=document.getElementById('dpLoad'),btn=document.getElementById('runBtn');
+  err.classList.remove('on');load.classList.add('on');btn.disabled=true;
+  try{
+    const pKey=document.getElementById('preset').value;
+    const pName=presets[pKey]?.name||'Custom AOI';
+    const bbox=document.getElementById('bbox').value.split(',').map(x=>Number(x.trim()));
+    if(bbox.length!==4||bbox.some(Number.isNaN))throw new Error('BBox must be 4 comma-separated numbers.');
+    const res=await fetch(`${API}/api/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:pName,bbox,days_back:Number(document.getElementById('days').value),max_cloud:Number(document.getElementById('cloud').value),limit:14})});
+    if(!res.ok)throw new Error(await res.text());
+    const data=await res.json();
+    drawResult(data);
+    renderSummary(data);
+    loadConstellations(data.aoi.bbox, data.aoi.name+' ('+data.aoi.code+')');
+  }catch(e){
+    err.classList.add('on');err.textContent='Analysis failed: '+e.message;
+  }finally{load.classList.remove('on');btn.disabled=false}
+}
+document.getElementById('runBtn').addEventListener('click',run);
+
+function renderSummary(data){
+  document.getElementById('sceneCount').textContent=data.scene_count;
+  const lat=data.selected.latest;
+  const bs=document.getElementById('bestScore');
+  bs.textContent=lat?lat.quality_score:'—';
+  bs.className='v '+(lat?'score-'+lat.quality_label:'');
+  document.getElementById('changeStatus').textContent=data.change.status+' — '+(data.change.geojson?.features?.length||0)+' cells';
+  document.getElementById('aoiCode').textContent=data.aoi?.code||'—';
+  renderSceneList(data.scenes);
+  renderEvidence(data);
+  renderRecord(data);
+  renderVisibility(data);
+  document.getElementById('vlmPacket').textContent=JSON.stringify(data.vlm_packet,null,2);
 }
 
 function renderSceneList(scenes){
-  if(!scenes?.length){ $('sceneList').innerHTML = '<div class="hint">No scenes returned.</div>'; return; }
-  $('sceneList').innerHTML = scenes.map(s=>`
-    <div class="scene-row">
-      ${thumb(s) ? `<img class="thumb" src="${thumb(s)}" referrerpolicy="no-referrer"/>` : '<div class="thumb"></div>'}
-      <div><div class="date">${fmtDate(s.datetime)}</div><div class="sub">${s.platform || 'sentinel'} · ${s.quality_label}</div></div>
-      <div class="cloud">${Number(s.cloud_cover ?? 0).toFixed(1)}% cloud<br>${s.quality_score}</div>
+  const el=document.getElementById('sceneList');
+  if(!scenes?.length){el.innerHTML='<div style="color:var(--muted);font-size:11px">No scenes returned.</div>';return}
+  el.innerHTML=scenes.map(s=>`
+    <div class="sc-row">
+      ${pickThumb(s)?`<img class="sc-thumb" src="${pickThumb(s)}" referrerpolicy="no-referrer"/>`:'<div class="sc-thumb"></div>'}
+      <div><div class="sc-date">${fmtDate(s.datetime)}</div><div class="sc-sub">${s.platform||'sentinel'} · ${s.quality_label}</div></div>
+      <div class="sc-cld">${Number(s.cloud_cover??0).toFixed(1)}%<br><span class="score-${s.quality_label}">${s.quality_score}</span></div>
     </div>`).join('');
 }
 
 function renderEvidence(data){
-  const latest = data.selected.latest, prev = data.selected.previous;
-  $('prevImg').outerHTML = `<div id="prevImg">${imgHtml(thumb(prev), 'previous')}</div>`;
-  $('latestImg').outerHTML = `<div id="latestImg">${imgHtml(thumb(latest), 'latest')}</div>`;
-  $('prevTitle').textContent = prev ? `${fmtDate(prev.datetime)} · score ${prev.quality_score} · cloud ${Number(prev.cloud_cover||0).toFixed(1)}%` : 'No previous scene';
-  $('latestTitle').textContent = latest ? `${fmtDate(latest.datetime)} · score ${latest.quality_score} · cloud ${Number(latest.cloud_cover||0).toFixed(1)}%` : 'No latest scene';
-  $('changeImg').outerHTML = `<div id="changeImg">${data.change.image_url ? `<img src="${data.change.image_url}"/>` : '<div class="empty-img">No change preview image</div>'}</div>`;
-  $('changeTitle').textContent = data.change.summary || '—';
-  $('indices').innerHTML = data.indices.map(i=>`<div class="evidence-card"><h3>${i.name}</h3><p><b>Formula:</b> ${i.formula}</p><p><b>Meaning:</b> ${i.meaning}</p></div>`).join('');
+  const lat=data.selected.latest,prev=data.selected.previous;
+  const prevEl=document.getElementById('prevImg'),latEl=document.getElementById('latestImg');
+  const pu=pickThumb(prev),lu=pickThumb(lat);
+  prevEl.outerHTML=`<div id="prevImg">${pu?`<img src="${pu}" referrerpolicy="no-referrer"/>`:'<div class="imgc-empty">Previous scene</div>'}</div>`;
+  latEl.outerHTML=`<div id="latestImg">${lu?`<img src="${lu}" referrerpolicy="no-referrer"/>`:'<div class="imgc-empty">Latest scene</div>'}</div>`;
+  document.getElementById('prevTitle').textContent=prev?`${fmtDate(prev.datetime)} · score ${prev.quality_score} · cloud ${Number(prev.cloud_cover||0).toFixed(1)}%`:'No previous scene';
+  document.getElementById('latestTitle').textContent=lat?`${fmtDate(lat.datetime)} · score ${lat.quality_score} · cloud ${Number(lat.cloud_cover||0).toFixed(1)}%`:'No latest scene';
+  const ci=document.getElementById('changeImg');
+  ci.outerHTML=`<div id="changeImg">${data.change.image_url?`<img src="${data.change.image_url}"/>`:'<div class="imgc-empty">No change preview image</div>'}</div>`;
+  document.getElementById('changeTitle').textContent=data.change.summary||'—';
+  document.getElementById('indices').innerHTML=(data.indices||[]).map(i=>`<div class="ind-card-sm"><div class="k">${i.name}</div><div class="v">${i.formula}</div><div style="font-size:10px;color:var(--muted)">${i.meaning}</div></div>`).join('');
+}
+
+function renderRecord(data){
+  const r=data.evidence_record;
+  if(!r){return}
+  _lastRecord=r;
+  document.getElementById('evRecordPanel').innerHTML=`
+    <div class="ev-id">${r.id}</div>
+    <div class="ev-row"><span class="ev-k">Captured</span><span class="ev-v">${r.captured}</span></div>
+    <div class="ev-row"><span class="ev-k">Location</span><span class="ev-v">${r.location}</span></div>
+    <div class="ev-row"><span class="ev-k">AOI name</span><span class="ev-v">${r.aoi_name}</span></div>
+    <div class="ev-row"><span class="ev-k">Sensor</span><span class="ev-v">${r.sensor}</span></div>
+    <div class="ev-row"><span class="ev-k">Event</span><span class="ev-v">${r.event}</span></div>
+    ${r.scene_id?`<div class="ev-row"><span class="ev-k">Scene ID</span><span class="ev-v">${r.scene_id}</span></div>`:''}
+    <div class="ev-seal">Integrity: ${r.integrity} &nbsp;·&nbsp; Chain: ${r.chain_of_custody}</div>
+    <div style="margin-top:10px">
+      <button class="btn btn-out btn-sm" onclick="exportRecord()">↓ Export evidence pack (.json)</button>
+    </div>`;
+}
+
+function exportRecord(){
+  if(!_lastRecord){return}
+  const blob=new Blob([JSON.stringify(_lastRecord,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${_lastRecord.id}.json`;a.click();
 }
 
 function renderVisibility(data){
-  $('visibility').innerHTML = data.visibility_matrix.map(v=>{
-    const cls = v.class.includes('not') ? 'red' : v.class.includes('external') ? 'amber' : v.class.includes('infer') ? 'amber' : 'green';
-    return `<div class="evidence-card"><h3>${v.class.replaceAll('_',' ')}</h3><div>${v.items.map(x=>`<span class="pill ${cls}">${x}</span>`).join('')}</div></div>`;
+  document.getElementById('visibility').innerHTML=(data.visibility_matrix||[]).map(v=>{
+    const cls=v.class.includes('not')?'vp-red':v.class.includes('external')?'vp-amb':v.class.includes('infer')?'vp-amb':'vp-grn';
+    return`<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">${v.class.replaceAll('_',' ')}</div><div>${v.items.map(x=>`<span class="vis-pill ${cls}">${x}</span>`).join('')}</div></div>`;
   }).join('');
-  const latest = data.selected.latest;
-  const assets = latest?.assets || {};
-  $('assets').innerHTML = Object.entries(assets).slice(0,40).map(([k,v])=>`<div class="asset"><span>${k}</span><a href="${v}" target="_blank">open</a></div>`).join('') || '<div class="hint">No assets.</div>';
+  const assets=data.selected?.latest?.assets||{};
+  document.getElementById('assets').innerHTML=Object.entries(assets).slice(0,40).map(([k,v])=>`<div class="asset-row"><span>${k}</span><a href="${v}" target="_blank">open ↗</a></div>`).join('')||'<div style="color:var(--muted);font-size:11px">No assets.</div>';
 }
 
-function renderSummary(data){
-  $('sceneCount').textContent = data.scene_count;
-  const latest = data.selected.latest;
-  $('bestScore').textContent = latest ? latest.quality_score : '—';
-  $('bestScore').className = `v score ${latest?.quality_label || ''}`;
-  $('changeStatus').textContent = data.change.status + ' — ' + (data.change.geojson?.features?.length || 0) + ' cells';
-  renderSceneList(data.scenes);
-  renderEvidence(data);
-  renderVisibility(data);
-  $('vlmPacket').textContent = JSON.stringify(data.vlm_packet, null, 2);
-}
+/* ---- Tab switching ---- */
+document.querySelectorAll('.dash-tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.dash-tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.dtc').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+  });
+});
 
-async function run(){
-  $('error').style.display = 'none'; $('loading').classList.add('on'); $('run').disabled = true;
+/* ---- Constellation timeline ---- */
+let allWindows=[];let activeFilter='all';
+
+async function loadConstellations(bbox, aoiLabel){
   try{
-    const preset = presets[$('preset').value];
-    const bbox = $('bbox').value.split(',').map(x=>Number(x.trim()));
-    if(bbox.length !== 4 || bbox.some(Number.isNaN)) throw new Error('BBox must be 4 comma-separated numbers.');
-    const res = await fetch(`${API}/api/analyze`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:preset.name, bbox, days_back:Number($('days').value), max_cloud:Number($('cloud').value), limit:14})});
-    if(!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    drawResult(data); renderSummary(data);
+    const bboxStr=bbox?bbox.join(','):'4.0,51.9,4.5,52.0';
+    const r=await fetch(`${API}/api/constellations?bbox=${bboxStr}`);
+    const d=await r.json();
+    allWindows=d.windows||[];
+    document.getElementById('ctlAoiName').textContent=aoiLabel||'AOI-07, next 24 h';
+    document.getElementById('cmNext').textContent=d.next_window||'—';
+    document.getElementById('cm24h').textContent=d.total_24h||'—';
+    document.getElementById('cmBest').textContent=d.best_resolution||'0.35 m';
+    // Render constellation cards
+    const cards=document.getElementById('conCards');
+    if(cards&&d.constellations){
+      cards.innerHTML=d.constellations.map(c=>`
+        <div class="con-card">
+          <div class="con-ctype">${c.type==='sar'?'<span class="sar-tag">SAR · All-weather</span>':'Optical · EO'}</div>
+          <div class="con-cname">${c.name}</div>
+          <div class="con-cres">${c.resolution}</div>
+          <div class="con-cdesc">${c.description}</div>
+        </div>`).join('');
+    }
+    renderTimeline();
   }catch(e){
-    $('error').style.display = 'block';
-    $('error').textContent = `Could not run analysis: ${e.message}. Make sure backend is running at ${API}.`;
-  }finally{
-    $('loading').classList.remove('on'); $('run').disabled = false;
+    document.getElementById('ctlAoiName').textContent='Constellation data unavailable';
   }
 }
 
-$('run').addEventListener('click', run);
-for(const t of document.querySelectorAll('.tab')){
-  t.addEventListener('click',()=>{
-    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
-    document.querySelectorAll('.tab-content').forEach(x=>x.style.display='none');
-    $(`tab-${t.dataset.tab}`).style.display='block';
+function renderTimeline(){
+  const bar=document.getElementById('tlBar');
+  const now=new Date();
+  const nowHour=now.getUTCHours()+now.getUTCMinutes()/60;
+  const nowPct=(nowHour/24)*100;
+  bar.innerHTML=`<div class="tl-now" style="left:${nowPct}%"></div>`;
+  const lbl=document.getElementById('tlNowLbl');
+  if(lbl){lbl.style.left=nowPct+'%'}
+  document.getElementById('cmNow').textContent=now.getUTCHours().toString().padStart(2,'0')+':'+now.getUTCMinutes().toString().padStart(2,'0');
+  const wins=activeFilter==='all'?allWindows:allWindows.filter(w=>w.constellation_id===activeFilter);
+  wins.forEach(w=>{
+    const pct=(w.hour_of_day/24)*100;
+    const div=document.createElement('div');
+    div.className='tl-win '+(w.type==='sar'?'tl-sar':'tl-opt');
+    div.style.left=Math.min(97,pct)+'%';
+    div.style.width='2.5%';
+    div.title=`${w.constellation_name} · ${w.time_utc} UTC · ${w.resolution}`;
+    bar.appendChild(div);
   });
 }
 
-// Draw default AOI before backend run
-const b = presets.rotterdam_port.bbox;
-aoiLayer = L.rectangle(bboxBounds(b), {color:'#6bbcff', weight:2, fill:false}).addTo(map);
-map.fitBounds(bboxBounds(b));
+document.querySelectorAll('.ctl-fb').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.ctl-fb').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter=btn.dataset.filter;
+    renderTimeline();
+  });
+});
+
+loadConstellations(null, 'AOI-07, next 24 h');
+
+/* ---- Maritime AIS ---- */
+async function loadMaritime(){
+  try{
+    const r=await fetch(`${API}/api/maritime`);
+    const d=await r.json();
+    document.getElementById('aisVessels').innerHTML=(d.vessels||[]).map(v=>`
+      <div class="ais-vessel">
+        <div>
+          <div class="ais-name">${v.name}</div>
+          <div class="ais-det">MMSI ${v.mmsi} · ${v.type} · ${v.speed} · ${v.course}</div>
+        </div>
+        <div class="ais-sts ${v.status==='At anchor'||v.status==='Moored'?'amb':''}">${v.status}</div>
+      </div>`).join('');
+  }catch(e){
+    document.getElementById('aisVessels').innerHTML='<div style="color:var(--muted);font-size:11px">Maritime data unavailable.</div>';
+  }
+}
+loadMaritime();
+
+/* ---- Industries ---- */
+async function loadIndustries(){
+  try{
+    const r=await fetch(`${API}/api/industries`);
+    const d=await r.json();
+    document.getElementById('indGrid').innerHTML=(d.industries||[]).map(i=>`
+      <div class="ind-c">
+        <div class="ind-code">${i.aoi}</div>
+        <div class="ind-cat">${i.category}</div>
+        <div class="ind-ttl">${i.sector}</div>
+        <div class="ind-desc">${i.description}</div>
+      </div>`).join('');
+  }catch(e){
+    document.getElementById('indGrid').innerHTML='<div style="color:var(--muted);font-size:12px;padding:16px">Industries data unavailable.</div>';
+  }
+}
+loadIndustries();
+
 </script>
 </body>
 </html>
