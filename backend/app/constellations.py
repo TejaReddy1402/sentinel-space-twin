@@ -1,7 +1,11 @@
+"""Constellation definitions and collection window scheduling."""
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 from typing import Any
+
+from .constants import COLLECTION_WINDOW_HOURS, COLLECTION_WINDOW_LIMIT
 
 CONSTELLATION_DEFS: list[dict[str, Any]] = [
     {
@@ -25,8 +29,11 @@ CONSTELLATION_DEFS: list[dict[str, Any]] = [
         "name": "Airbus Pléiades",
         "resolution": "0.50 m",
         "type": "optical",
-        "description": "Additional optical capacity and revisit for wider-area and time-critical collection.",
-        "revisit_hours": 24.0,
+        "description": (
+            "Very high-resolution optical capacity with daily collection capability. "
+            "The Pléiades constellation (NEO + classic) can image any point once per day."
+        ),
+        "revisit_hours": 1.0,
     },
     {
         "id": "iceye",
@@ -39,23 +46,35 @@ CONSTELLATION_DEFS: list[dict[str, Any]] = [
 ]
 
 INDUSTRIES: list[dict[str, Any]] = [
-    {"aoi": "AOI-07", "category": "Energy & Industrial", "sector": "Oil, gas and petrochemical", "description": "Terminals, pipelines and processing sites under persistent watch."},
-    {"aoi": "AOI-21", "category": "Aviation Security", "sector": "Airports and aviation", "description": "Perimeter, apron and approach monitoring."},
-    {"aoi": "AOI-18", "category": "Maritime & Trade", "sector": "Ports and shipping lanes", "description": "Vessel tracking, chokepoints and supply chains."},
-    {"aoi": "DD-2291", "category": "Mineral Extraction", "sector": "Mining and critical minerals", "description": "Operational validation and geological insight."},
-    {"aoi": "AOI-12", "category": "Energy & Utilities", "sector": "Power generation and grid", "description": "Plants, substations and transmission corridors."},
+    {"aoi": "AOI-07", "category": "Energy & Industrial",    "sector": "Oil, gas and petrochemical",   "description": "Terminals, pipelines and processing sites under persistent watch."},
+    {"aoi": "AOI-21", "category": "Aviation Security",      "sector": "Airports and aviation",        "description": "Perimeter, apron and approach monitoring."},
+    {"aoi": "AOI-18", "category": "Maritime & Trade",       "sector": "Ports and shipping lanes",     "description": "Vessel tracking, chokepoints and supply chains."},
+    {"aoi": "DD-2291", "category": "Mineral Extraction",   "sector": "Mining and critical minerals", "description": "Operational validation and geological insight."},
+    {"aoi": "AOI-12", "category": "Energy & Utilities",     "sector": "Power generation and grid",   "description": "Plants, substations and transmission corridors."},
     {"aoi": "AOI-31", "category": "Real Estate & Commercial", "sector": "Smart buildings and commercial", "description": "Campuses, estates and portfolio sites under persistent watch."},
-    {"aoi": "AOI-09", "category": "Transport & Rail", "sector": "Rail networks and telecom", "description": "Linear infrastructure across borders."},
-    {"aoi": "AOI-03", "category": "Renewables", "sector": "Solar and wind", "description": "Remote generation sites with change detection."},
-    {"aoi": "AOI-14", "category": "Water", "sector": "Treatment and reservoirs", "description": "Critical water assets and dams."},
+    {"aoi": "AOI-09", "category": "Transport & Rail",       "sector": "Rail networks and telecom",   "description": "Linear infrastructure across borders."},
+    {"aoi": "AOI-03", "category": "Renewables",             "sector": "Solar and wind",              "description": "Remote generation sites with change detection."},
+    {"aoi": "AOI-14", "category": "Water",                  "sector": "Treatment and reservoirs",    "description": "Critical water assets and dams."},
 ]
 
 
 def _daily_passes(revisit_hours: float) -> int:
+    """Calculate how many passes per 24-hour period for a given revisit cadence."""
     return max(1, round(24 / revisit_hours))
 
 
-def collection_windows_for_aoi(bbox: list[float], hours: int = 24) -> dict[str, Any]:
+def collection_windows_for_aoi(
+    bbox: list[float],
+    hours: int = COLLECTION_WINDOW_HOURS,
+) -> dict[str, Any]:
+    """
+    Generate illustrative collection windows for each constellation over the
+    next ``hours`` hours for the given AOI bounding box.
+
+    The per-AOI offset is derived from a SHA-256 hash of the constellation ID
+    and the rounded western longitude so that windows are deterministic across
+    server restarts and processes.
+    """
     now = dt.datetime.now(dt.timezone.utc)
     all_windows: list[dict[str, Any]] = []
     next_win: dict[str, Any] | None = None
@@ -63,7 +82,10 @@ def collection_windows_for_aoi(bbox: list[float], hours: int = 24) -> dict[str, 
     for const in CONSTELLATION_DEFS:
         daily = _daily_passes(const["revisit_hours"])
         interval_minutes = 1440 / daily
-        offset = abs(hash(const["id"] + str(round(bbox[0], 1)))) % int(interval_minutes)
+        seed = hashlib.sha256(
+            f"{const['id']}{round(bbox[0], 1)}".encode()
+        ).hexdigest()
+        offset = int(seed, 16) % int(interval_minutes)
         t = now + dt.timedelta(minutes=offset)
         while t < now + dt.timedelta(hours=hours):
             mins = int((t - now).total_seconds() / 60)
@@ -91,7 +113,7 @@ def collection_windows_for_aoi(bbox: list[float], hours: int = 24) -> dict[str, 
         label = "No windows scheduled"
 
     return {
-        "windows": all_windows[:60],
+        "windows": all_windows[:COLLECTION_WINDOW_LIMIT],
         "total_24h": len(all_windows),
         "next_window": label,
         "best_resolution": "0.35 m",

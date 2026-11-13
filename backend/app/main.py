@@ -1,25 +1,53 @@
+"""
+Sentinel Space Twin — Data Engine v2
+FastAPI application entry point.
+"""
 from __future__ import annotations
 
 import datetime as dt
+import logging
+import logging.config
+from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from .config import settings
+from .constellations import CONSTELLATION_DEFS, INDUSTRIES, collection_windows_for_aoi
+from .constants import DEFAULT_BBOX
+from .enhancement import preview_change, production_indices, visibility_matrix
+from .evidence import _aoi_code, generate_record
 from .models import AnalyzeRequest
 from .stac_client import search_sentinel2, summarize_feature
-from .enhancement import preview_change, visibility_matrix, production_indices
 from .vlm import build_vlm_packet
-from .evidence import generate_record, _aoi_code
-from .constellations import collection_windows_for_aoi, INDUSTRIES, CONSTELLATION_DEFS
 
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%SZ",
+)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
 app = FastAPI(
-    title="infinityPLEX — Earth Intelligence Platform",
+    title="Sentinel Space Twin — Data Engine v2",
     version="2.0.0",
-    description="Integrated Earth Intelligence for Global Infrastructure Operations and Project Assurance.",
+    description=(
+        "Evidence-first satellite intelligence platform. "
+        "Scene discovery, quality scoring, change detection, "
+        "chain-of-custody evidence records and collection window scheduling."
+    ),
 )
 
+# CORS: permissive for local development. Restrict origins in production.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,79 +56,128 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Static files (generated change-preview images)
+_static_dir = Path(__file__).parent.parent / "static"
+_static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
-PRESETS = {
-    "rotterdam_port":   {"name": "Rotterdam Port",        "bbox": [3.90, 51.82, 4.65, 52.08],   "aoi": "AOI-18"},
-    "london_gateway":   {"name": "London Gateway Port",   "bbox": [0.35, 51.44, 0.58, 51.55],   "aoi": "AOI-21"},
-    "heathrow":         {"name": "London Heathrow",       "bbox": [-0.55, 51.42, -0.36, 51.51], "aoi": "AOI-21"},
-    "mumbai_port":      {"name": "Mumbai Port",           "bbox": [72.78, 18.88, 72.93, 19.05], "aoi": "AOI-07"},
-    "singapore_port":   {"name": "Singapore Port",        "bbox": [103.60, 1.15, 104.05, 1.38], "aoi": "AOI-18"},
+# ---------------------------------------------------------------------------
+# Static reference data
+# ---------------------------------------------------------------------------
+PRESETS: dict[str, dict[str, Any]] = {
+    "rotterdam_port":  {"name": "Rotterdam Port",       "bbox": [3.90, 51.82, 4.65, 52.08]},
+    "london_gateway":  {"name": "London Gateway Port",  "bbox": [0.35, 51.44, 0.58, 51.55]},
+    "heathrow":        {"name": "London Heathrow",      "bbox": [-0.55, 51.42, -0.36, 51.51]},
+    "mumbai_port":     {"name": "Mumbai Port",          "bbox": [72.78, 18.88, 72.93, 19.05]},
+    "singapore_port":  {"name": "Singapore Port",       "bbox": [103.60, 1.15, 104.05, 1.38]},
 }
 
-MARITIME_VESSELS = [
-    {"name": "MSC AURORA",    "mmsi": "235678901", "speed": "12.4 kn", "course": "084°", "status": "Underway", "type": "Container"},
-    {"name": "EVER FORWARD",  "mmsi": "477123456", "speed": "0.0 kn",  "course": "270°", "status": "At anchor","type": "Container"},
-    {"name": "NORDIC HAWK",   "mmsi": "257890123", "speed": "8.1 kn",  "course": "192°", "status": "Underway", "type": "Tanker"},
-    {"name": "BW ENTERPRISE", "mmsi": "563012345", "speed": "14.2 kn", "course": "310°", "status": "Underway", "type": "LNG"},
-    {"name": "CELTIC HORIZON", "mmsi": "232456789","speed": "0.0 kn",  "course": "000°", "status": "Moored",   "type": "Bulk"},
+# Illustrative AIS data — replace with a live AIS provider (e.g. Spire, MarineTraffic API)
+MARITIME_VESSELS: list[dict[str, Any]] = [
+    {"name": "MSC AURORA",     "mmsi": "235678901", "speed": "12.4 kn", "course": "084°", "status": "Underway",  "type": "Container"},
+    {"name": "EVER FORWARD",   "mmsi": "477123456", "speed": "0.0 kn",  "course": "270°", "status": "At anchor", "type": "Container"},
+    {"name": "NORDIC HAWK",    "mmsi": "257890123", "speed": "8.1 kn",  "course": "192°", "status": "Underway",  "type": "Tanker"},
+    {"name": "BW ENTERPRISE",  "mmsi": "563012345", "speed": "14.2 kn", "course": "310°", "status": "Underway",  "type": "LNG"},
+    {"name": "CELTIC HORIZON", "mmsi": "232456789", "speed": "0.0 kn",  "course": "000°", "status": "Moored",    "type": "Bulk"},
 ]
 
 
-@app.get("/api/health")
+# ---------------------------------------------------------------------------
+# Startup
+# ---------------------------------------------------------------------------
+@app.on_event("startup")
+async def _startup() -> None:
+    settings.log_config()
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+@app.get("/api/health", tags=["system"])
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "infinityplex-earth-intelligence-v2"}
+    """Service liveness probe."""
+    return {"status": "ok", "service": "sentinel-space-twin-v2"}
 
 
-@app.get("/api/presets")
+@app.get("/api/presets", tags=["reference"])
 def presets() -> dict[str, Any]:
+    """Return named AOI presets with bbox coordinates."""
     return PRESETS
 
 
-@app.get("/api/industries")
+@app.get("/api/industries", tags=["reference"])
 def industries() -> dict[str, Any]:
+    """Return monitored industry sectors with AOI codes."""
     return {"industries": INDUSTRIES}
 
 
-@app.get("/api/constellations")
+@app.get("/api/constellations", tags=["collection"])
 def constellations(
-    bbox: str = Query(default="4.0,51.9,4.5,52.0", description="minLon,minLat,maxLon,maxLat"),
+    bbox: str = Query(
+        default=",".join(str(x) for x in DEFAULT_BBOX),
+        description="minLon,minLat,maxLon,maxLat",
+    ),
 ) -> dict[str, Any]:
+    """Return 24-hour collection windows for the given AOI bounding box."""
     try:
         parts = [float(x) for x in bbox.split(",")]
         if len(parts) != 4:
-            raise ValueError
-    except ValueError:
-        parts = [4.0, 51.9, 4.5, 52.0]
+            raise ValueError("Expected 4 comma-separated floats")
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid bbox '{bbox}': {exc}. Expected minLon,minLat,maxLon,maxLat.",
+        ) from exc
     return collection_windows_for_aoi(parts)
 
 
-@app.get("/api/maritime")
+@app.get("/api/maritime", tags=["reference"])
 def maritime() -> dict[str, Any]:
+    """
+    Return maritime vessel data.
+
+    Data is illustrative. Integrate a live AIS provider (Spire, MarineTraffic,
+    exactEarth) to replace with real vessel positions.
+    """
     return {
         "status": "illustrative",
-        "note": "Live AIS data requires integration with an AIS provider (e.g. MarineTraffic, Spire). Data shown is illustrative.",
+        "note": (
+            "Live AIS data requires integration with an AIS provider "
+            "(e.g. MarineTraffic, Spire). Data shown is illustrative."
+        ),
         "vessels": MARITIME_VESSELS,
         "capabilities": [
-            "Maritime domain awareness",
-            "Live AIS identity, speed, course and route",
+            "Maritime domain awareness — live AIS identity, speed, course and route",
             "Vessels detected and tracked in satellite imagery",
             "Port, anchorage and chokepoint monitoring",
             "Alerts for high-risk corridors and supply-chain disruption",
+            "Dark vessel detection via SAR when AIS is switched off",
         ],
     }
 
 
-
-@app.post("/api/analyze")
+@app.post("/api/analyze", tags=["analysis"])
 async def analyze(req: AnalyzeRequest) -> dict[str, Any]:
+    """
+    Run a full analysis cycle for the requested AOI:
+
+    1. Search Sentinel-2 L2A STAC catalogue for scenes within bbox/timerange.
+    2. Score and rank scenes by cloud cover, asset completeness and recency.
+    3. Generate a preview-level change detection between the two best scenes.
+    4. Build a VLM input packet for downstream vision-language model analysis.
+    5. Compute collection windows for the AOI from the constellation schedule.
+    6. Seal a SHA-256 chain-of-custody evidence record.
+    """
     try:
-        features = await search_sentinel2(req.bbox, req.days_back, req.max_cloud, req.limit)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"STAC search failed: {exc}") from exc
+        features = await search_sentinel2(
+            req.bbox, req.days_back, req.max_cloud, req.limit
+        )
+    except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError) as exc:
+        logger.error("STAC search failed: %s", exc)
+        raise HTTPException(status_code=502, detail="STAC search failed — upstream error.") from exc
 
     scenes = [summarize_feature(f, i) for i, f in enumerate(features)]
-    scenes = sorted(scenes, key=lambda s: (s["quality_score"], s.get("datetime") or ""), reverse=True)
+    scenes.sort(key=lambda s: (s["quality_score"], s.get("datetime") or ""), reverse=True)
 
     latest = scenes[0] if scenes else None
     previous = scenes[1] if len(scenes) > 1 else None
@@ -116,20 +193,23 @@ async def analyze(req: AnalyzeRequest) -> dict[str, Any]:
         change = await preview_change(latest, previous, req.bbox)
 
     vlm_packet = build_vlm_packet(req.name, req.bbox, latest, previous, change)
-
-    # Collection windows for this AOI
     cw = collection_windows_for_aoi(req.bbox)
 
-    # Evidence record
-    scene_count = len(scenes)
-    event_desc = f"{scene_count} scene(s) captured — change status: {change['status']}"
-    if latest:
-        event_desc = f"Scene capture — {scene_count} scenes, best quality {latest['quality_score']}"
+    event_desc = (
+        f"Scene capture — {len(scenes)} scenes, best quality {latest['quality_score']}"
+        if latest
+        else f"{len(scenes)} scene(s) captured — change status: {change['status']}"
+    )
     evidence = generate_record(
         aoi_name=req.name,
         bbox=req.bbox,
         event=event_desc,
         scene_id=latest["id"] if latest else None,
+    )
+
+    logger.info(
+        "Analysis complete | aoi=%s scenes=%d change=%s evidence=%s",
+        req.name, len(scenes), change["status"], evidence["id"],
     )
 
     return {
@@ -153,13 +233,13 @@ async def analyze(req: AnalyzeRequest) -> dict[str, Any]:
             "best_resolution": cw["best_resolution"],
         },
         "data_reality": {
-            "sentinel_is": "latest available satellite pass / near-real-time earth observation",
-            "sentinel_is_not": "continuous live video or street-level surveillance",
+            "sentinel_is": "latest available satellite pass via Element84 STAC — near-real-time EO",
+            "sentinel_is_not": "continuous live video, street-level surveillance or sub-10m imagery",
             "upgrade_path": [
-                "Use Sentinel Hub Process API for real RGB/NDVI/NDWI/NBR renders",
-                "Use raw COG band processing with SCL cloud masks for production change detection",
-                "Fuse AIS/ADS-B/traffic APIs for real live movement layers",
-                "Pass evidence crops + metadata into VLM for explanation, not fake super-resolution",
+                "Sentinel Hub Process API for real RGB/NDVI/NDWI/NBR rendered imagery",
+                "Raw COG band processing with SCL cloud masks for production change detection",
+                "Live AIS/ADS-B/traffic APIs for real movement layers",
+                "VLM scene explanation using thumbnails + change GeoJSON",
             ],
         },
     }

@@ -244,11 +244,11 @@ button{font-family:inherit;cursor:pointer}
         <div class="dp-inn">
           <div class="dp-t">1. Choose AOI</div>
 
-          <div class="dp-row"><div class="dp-lbl">Preset</div><select id="preset" class="dp-sel"></select></div>
-          <div class="dp-row"><div class="dp-lbl">BBox [minLon,minLat,maxLon,maxLat]</div><input id="bbox" class="dp-inp"/></div>
+          <div class="dp-row"><label class="dp-lbl" for="preset">Preset</label><select id="preset" class="dp-sel"></select></div>
+          <div class="dp-row"><label class="dp-lbl" for="bbox">BBox [minLon,minLat,maxLon,maxLat]</label><input id="bbox" class="dp-inp"/></div>
           <div class="dp-g2 dp-row">
-            <div><div class="dp-lbl">Days back</div><input id="days" class="dp-inp" type="number" value="90"/></div>
-            <div><div class="dp-lbl">Max cloud %</div><input id="cloud" class="dp-inp" type="number" value="40"/></div>
+            <div><label class="dp-lbl" for="days">Days back</label><input id="days" class="dp-inp" type="number" value="90"/></div>
+            <div><label class="dp-lbl" for="cloud">Max cloud %</label><input id="cloud" class="dp-inp" type="number" value="40"/></div>
           </div>
           <button id="runBtn" class="dp-btn">▶ Run data enhancement</button>
           <div id="dpLoad" class="dp-load">Fetching scenes, scoring data, building change layer…</div>
@@ -417,7 +417,12 @@ button{font-family:inherit;cursor:pointer}
 <div class="footer">Sentinel Space Twin — Data Engine v2 &nbsp;·&nbsp; Powered by Sentinel-2 L2A via Element84 STAC &nbsp;·&nbsp; <span id="footClock"></span> UTC</div>
 
 <script>
-const API = 'http://localhost:8787';
+const API = (() => {
+  if (window.location.hostname === 'localhost' && window.location.port === '8080') {
+    return 'http://localhost:8787';
+  }
+  return window.location.port ? `${window.location.protocol}//${window.location.hostname}:8787` : '';
+})();
 
 /* ---- Clock ---- */
 function tickClock(){
@@ -484,6 +489,11 @@ async function run(){
     const pName=presets[pKey]?.name||'Custom AOI';
     const bbox=document.getElementById('bbox').value.split(',').map(x=>Number(x.trim()));
     if(bbox.length!==4||bbox.some(Number.isNaN))throw new Error('BBox must be 4 comma-separated numbers.');
+    const [minLon, minLat, maxLon, maxLat] = bbox;
+    if (minLon >= maxLon) throw new Error('minLon must be less than maxLon');
+    if (minLat >= maxLat) throw new Error('minLat must be less than maxLat');
+    if (minLon < -180 || maxLon > 180) throw new Error('Longitude out of range [-180, 180]');
+    if (minLat < -90 || maxLat > 90) throw new Error('Latitude out of range [-90, 90]');
     const res=await fetch(`${API}/api/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:pName,bbox,days_back:Number(document.getElementById('days').value),max_cloud:Number(document.getElementById('cloud').value),limit:14})});
     if(!res.ok)throw new Error(await res.text());
     const data=await res.json();
@@ -516,24 +526,52 @@ function renderSceneList(scenes){
   if(!scenes?.length){el.innerHTML='<div style="color:var(--muted);font-size:11px">No scenes returned.</div>';return}
   el.innerHTML=scenes.map(s=>`
     <div class="sc-row">
-      ${pickThumb(s)?`<img class="sc-thumb" src="${pickThumb(s)}" referrerpolicy="no-referrer"/>`:'<div class="sc-thumb"></div>'}
+      ${pickThumb(s)?`<img class="sc-thumb" src="${pickThumb(s)}" referrerpolicy="no-referrer" alt="Scene ${s.id}"/>`:'<div class="sc-thumb"></div>'}
       <div><div class="sc-date">${fmtDate(s.datetime)}</div><div class="sc-sub">${s.platform||'sentinel'} · ${s.quality_label}</div></div>
       <div class="sc-cld">${Number(s.cloud_cover??0).toFixed(1)}%<br><span class="score-${s.quality_label}">${s.quality_score}</span></div>
     </div>`).join('');
 }
 
-function renderEvidence(data){
-  const lat=data.selected.latest,prev=data.selected.previous;
-  const prevEl=document.getElementById('prevImg'),latEl=document.getElementById('latestImg');
-  const pu=pickThumb(prev),lu=pickThumb(lat);
-  prevEl.outerHTML=`<div id="prevImg">${pu?`<img src="${pu}" referrerpolicy="no-referrer"/>`:'<div class="imgc-empty">Previous scene</div>'}</div>`;
-  latEl.outerHTML=`<div id="latestImg">${lu?`<img src="${lu}" referrerpolicy="no-referrer"/>`:'<div class="imgc-empty">Latest scene</div>'}</div>`;
-  document.getElementById('prevTitle').textContent=prev?`${fmtDate(prev.datetime)} · score ${prev.quality_score} · cloud ${Number(prev.cloud_cover||0).toFixed(1)}%`:'No previous scene';
-  document.getElementById('latestTitle').textContent=lat?`${fmtDate(lat.datetime)} · score ${lat.quality_score} · cloud ${Number(lat.cloud_cover||0).toFixed(1)}%`:'No latest scene';
-  const ci=document.getElementById('changeImg');
-  ci.outerHTML=`<div id="changeImg">${data.change.image_url?`<img src="${data.change.image_url}"/>`:'<div class="imgc-empty">No change preview image</div>'}</div>`;
-  document.getElementById('changeTitle').textContent=data.change.summary||'—';
-  document.getElementById('indices').innerHTML=(data.indices||[]).map(i=>`<div class="ind-card-sm"><div class="k">${i.name}</div><div class="v">${i.formula}</div><div style="font-size:10px;color:var(--muted)">${i.meaning}</div></div>`).join('');
+function _setImageSlot(id, url, emptyLabel) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = '';
+  if (url && /^https?:\/\//i.test(url)) {
+    const img = document.createElement('img');
+    img.referrerPolicy = 'no-referrer';
+    img.alt = '';
+    img.src = url;
+    el.className = '';
+    el.appendChild(img);
+  } else {
+    el.className = 'imgc-empty';
+    el.textContent = emptyLabel;
+  }
+}
+
+function renderEvidence(data) {
+  const lat = data.selected.latest, prev = data.selected.previous;
+  _setImageSlot('prevImg', pickThumb(prev), 'Previous scene');
+  _setImageSlot('latestImg', pickThumb(lat), 'Latest scene');
+  document.getElementById('prevTitle').textContent = prev
+    ? `${fmtDate(prev.datetime)} · score ${prev.quality_score} · cloud ${Number(prev.cloud_cover || 0).toFixed(1)}%`
+    : 'No previous scene';
+  document.getElementById('latestTitle').textContent = lat
+    ? `${fmtDate(lat.datetime)} · score ${lat.quality_score} · cloud ${Number(lat.cloud_cover || 0).toFixed(1)}%`
+    : 'No latest scene';
+  _setImageSlot('changeImg', data.change.image_url || null, 'No change preview image');
+  document.getElementById('changeTitle').textContent = data.change.summary || '—';
+  document.getElementById('indices').innerHTML = '';
+  (data.indices || []).forEach(i => {
+    const card = document.createElement('div');
+    card.className = 'ind-card-sm';
+    card.innerHTML = '';
+    const k = document.createElement('div'); k.className = 'k'; k.textContent = i.name;
+    const v = document.createElement('div'); v.className = 'v'; v.textContent = i.formula;
+    const m = document.createElement('div'); m.style.cssText = 'font-size:10px;color:var(--muted)'; m.textContent = i.meaning;
+    card.appendChild(k); card.appendChild(v); card.appendChild(m);
+    document.getElementById('indices').appendChild(card);
+  });
 }
 
 function renderRecord(data){
@@ -566,7 +604,27 @@ function renderVisibility(data){
     return`<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">${v.class.replaceAll('_',' ')}</div><div>${v.items.map(x=>`<span class="vis-pill ${cls}">${x}</span>`).join('')}</div></div>`;
   }).join('');
   const assets=data.selected?.latest?.assets||{};
-  document.getElementById('assets').innerHTML=Object.entries(assets).slice(0,40).map(([k,v])=>`<div class="asset-row"><span>${k}</span><a href="${v}" target="_blank">open ↗</a></div>`).join('')||'<div style="color:var(--muted);font-size:11px">No assets.</div>';
+  const assetList = document.getElementById('assets');
+  assetList.innerHTML = '';
+  const entries = Object.entries(assets).slice(0, 40);
+  if (!entries.length) {
+    assetList.innerHTML = '<div style="color:var(--muted);font-size:11px">No assets.</div>';
+  } else {
+    entries.forEach(([k, v]) => {
+      const row = document.createElement('div');
+      row.className = 'asset-row';
+      const name = document.createElement('span');
+      name.textContent = k;
+      const link = document.createElement('a');
+      link.href = v;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'open ↗';
+      row.appendChild(name);
+      row.appendChild(link);
+      assetList.appendChild(row);
+    });
+  }
 }
 
 /* ---- Tab switching ---- */

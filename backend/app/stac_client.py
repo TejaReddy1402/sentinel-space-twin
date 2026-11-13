@@ -1,76 +1,147 @@
+"""STAC API client for Sentinel-2 L2A scene discovery."""
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from typing import Any
+
 import httpx
+
 from .config import settings
+from .constants import (
+    CLOUD_SCORE_DIVISOR,
+    RECENCY_FLOOR,
+    RECENCY_PENALTY_PER_RANK,
+    SCORE_STRONG,
+    SCORE_USABLE,
+    SCORE_WEAK,
+    SCORE_WEIGHT_CLOUD,
+    SCORE_WEIGHT_COMPLETENESS,
+    SCORE_WEIGHT_RECENCY,
+    STAC_COMPLETENESS_ASSETS,
+    THUMBNAIL_ASSET_PRIORITY,
+)
+
+logger = logging.getLogger(__name__)
 
 
-def utc_now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
-
-
-async def search_sentinel2(bbox: list[float], days_back: int, max_cloud: float, limit: int) -> list[dict[str, Any]]:
-    end = utc_now()
+def _datetime_range(days_back: int) -> str:
+    end = dt.datetime.now(dt.timezone.utc)
     start = end - dt.timedelta(days=days_back)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    return f"{start.strftime(fmt)}/{end.strftime(fmt)}"
+
+
+async def search_sentinel2(
+    bbox: list[float],
+    days_back: int,
+    max_cloud: float,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Search Element84 STAC API for Sentinel-2 L2A scenes within bbox."""
     payload = {
-        "collections": [settings.stac_collection],
+        "collections": ["sentinel-2-l2a"],
         "bbox": bbox,
-        "datetime": f"{start.isoformat().replace('+00:00','Z')}/{end.isoformat().replace('+00:00','Z')}",
+        "datetime": _datetime_range(days_back),
+        "query": {"eo:cloud_cover": {"lte": max_cloud}},
         "limit": limit,
-        "sortby": [{"field": "properties.datetime", "direction": "desc"}],
-        "query": {"eo:cloud_cover": {"lt": max_cloud}},
+        "fields": {
+            "include": [
+                "id",
+                "geometry",
+                "bbox",
+                "properties.datetime",
+                "properties.platform",
+                "properties.eo:cloud_cover",
+                "assets",
+            ]
+        },
     }
-    async with httpx.AsyncClient(timeout=35) as client:
-        res = await client.post(settings.stac_api_url, json=payload)
-        res.raise_for_status()
-        data = res.json()
-    return data.get("features", [])
+    logger.debug(
+        "STAC search | bbox=%s days_back=%d max_cloud=%s limit=%d",
+        bbox, days_back, max_cloud, limit,
+    )
+    async with httpx.AsyncClient(timeout=settings.stac_timeout_seconds) as client:
+        try:
+            resp = await client.post(settings.stac_api_url, json=payload)
+            resp.raise_for_status()
+        except httpx.TimeoutException:
+            logger.error("STAC API timed out after %ds", settings.stac_timeout_seconds)
+            raise
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "STAC API HTTP %s: %s",
+                exc.response.status_code,
+                exc.response.text[:300],
+            )
+            raise
+        except httpx.RequestError as exc:
+            logger.error("STAC API network error: %s", exc)
+            raise
+
+    features: list[dict[str, Any]] = resp.json().get("features", [])
+    logger.info("STAC returned %d feature(s) for bbox=%s", len(features), bbox)
+    return features
 
 
 def extract_asset_urls(feature: dict[str, Any]) -> dict[str, str]:
+    """Return {asset_key: href_url} for all assets that expose an href."""
     assets = feature.get("assets", {}) or {}
-    names = [
-        "thumbnail", "visual", "rendered_preview",
-        "red", "green", "blue", "nir", "nir08", "swir16", "swir22", "scl",
-        "B02", "B03", "B04", "B08", "B11", "B12", "SCL"
-    ]
     out: dict[str, str] = {}
-    for name in names:
-        a = assets.get(name)
-        if isinstance(a, dict) and a.get("href"):
-            out[name] = a["href"]
-    # Also include every asset href under a safe key, because STAC collections differ.
+    priority = THUMBNAIL_ASSET_PRIORITY + [
+        a for a in STAC_COMPLETENESS_ASSETS if a not in THUMBNAIL_ASSET_PRIORITY
+    ]
+    for name in priority:
+        if name in out:
+            continue
+        asset = assets.get(name)
+        if isinstance(asset, dict) and asset.get("href"):
+            out[name] = str(asset["href"])
     for key, asset in assets.items():
-        if isinstance(asset, dict) and asset.get("href") and key not in out:
-            out[key] = asset["href"]
+        if key not in out and isinstance(asset, dict) and asset.get("href"):
+            out[key] = str(asset["href"])
     return out
 
 
-def score_scene(feature: dict[str, Any], rank: int) -> tuple[float, str, dict[str, float]]:
+def score_scene(
+    feature: dict[str, Any],
+    rank: int,
+) -> tuple[float, str, dict[str, float]]:
+    """
+    Calculate scene quality score (0–100).
+
+    Weights: cloud cover (55%), asset completeness (30%), recency rank (15%).
+    """
     props = feature.get("properties", {}) or {}
-    cloud = props.get("eo:cloud_cover")
-    if cloud is None:
-        cloud = props.get("cloud_cover", 50)
-    cloud = float(cloud or 0)
+    raw_cloud = props.get("eo:cloud_cover")
+    if raw_cloud is None:
+        raw_cloud = props.get("cloud_cover")
+    cloud = float(raw_cloud) if raw_cloud is not None else 50.0
 
-    assets = extract_asset_urls(feature)
-    needed = ["thumbnail", "visual", "red", "green", "blue", "nir", "nir08"]
-    completeness = sum(1 for k in needed if k in assets) / len(needed)
+    asset_urls = extract_asset_urls(feature)
+    completeness = sum(
+        1 for k in STAC_COMPLETENESS_ASSETS if k in asset_urls
+    ) / len(STAC_COMPLETENESS_ASSETS)
 
-    # Latest rank helps, but should not dominate cloud and asset quality.
-    recency_score = max(0.15, 1.0 - rank * 0.075)
-    cloud_score = max(0.0, 1.0 - cloud / 80.0)
-    score = (cloud_score * 0.55 + completeness * 0.30 + recency_score * 0.15) * 100
-    score = round(min(100.0, max(0.0, score)), 1)
-    if score >= 75:
+    recency_score = max(RECENCY_FLOOR, 1.0 - rank * RECENCY_PENALTY_PER_RANK)
+    cloud_score = max(0.0, 1.0 - cloud / CLOUD_SCORE_DIVISOR)
+
+    raw = (
+        cloud_score * SCORE_WEIGHT_CLOUD
+        + completeness * SCORE_WEIGHT_COMPLETENESS
+        + recency_score * SCORE_WEIGHT_RECENCY
+    ) * 100.0
+    score = round(min(100.0, max(0.0, raw)), 1)
+
+    if score >= SCORE_STRONG:
         label = "strong"
-    elif score >= 55:
+    elif score >= SCORE_USABLE:
         label = "usable"
-    elif score >= 35:
+    elif score >= SCORE_WEAK:
         label = "weak"
     else:
         label = "poor"
+
     parts = {
         "cloud_score": round(cloud_score * 100, 1),
         "asset_completeness": round(completeness * 100, 1),
@@ -80,18 +151,19 @@ def score_scene(feature: dict[str, Any], rank: int) -> tuple[float, str, dict[st
 
 
 def summarize_feature(feature: dict[str, Any], rank: int) -> dict[str, Any]:
+    """Convert a raw STAC feature into a SceneSummary-compatible dict."""
     props = feature.get("properties", {}) or {}
     score, label, parts = score_scene(feature, rank)
     assets = extract_asset_urls(feature)
     return {
-        "id": feature.get("id"),
-        "datetime": props.get("datetime") or feature.get("datetime"),
-        "platform": props.get("platform") or props.get("constellation"),
+        "id": feature.get("id", "unknown"),
+        "datetime": props.get("datetime"),
+        "platform": props.get("platform"),
         "cloud_cover": props.get("eo:cloud_cover") or props.get("cloud_cover"),
-        "bbox": feature.get("bbox"),
-        "geometry": feature.get("geometry"),
         "quality_score": score,
         "quality_label": label,
         "quality_parts": parts,
+        "geometry": feature.get("geometry"),
+        "bbox": feature.get("bbox"),
         "assets": assets,
     }

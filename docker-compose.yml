@@ -6,11 +6,19 @@ services:
       - "8787:8787"
     volumes:
       - ./backend/static:/app/static
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   frontend:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     ports:
       - "8080:80"
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
     depends_on:
       - backend
+    restart: unless-stopped
