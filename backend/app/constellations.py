@@ -112,9 +112,10 @@ def collection_windows_for_aoi(
     else:
         label = "No windows scheduled"
 
+    sliced = all_windows[:COLLECTION_WINDOW_LIMIT]
     return {
-        "windows": all_windows[:COLLECTION_WINDOW_LIMIT],
-        "total_24h": len(all_windows),
+        "windows": sliced,
+        "total_24h": len(sliced),
         "next_window": label,
         "best_resolution": "0.35 m",
         "constellations": CONSTELLATION_DEFS,

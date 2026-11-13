@@ -259,6 +259,80 @@ def _safe(val, fmt: str = "", fallback: str = "—") -> str:
         return fallback
 
 
+def _geocode_sync(query: str) -> dict | None:
+    if not query.strip():
+        return None
+    try:
+        r = httpx.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "json", "limit": 1},
+            headers={"User-Agent": "sentinel-space-twin/2.0"},
+            timeout=10,
+        )
+        data = r.json()
+        if data:
+            bb   = data[0]["boundingbox"]   # [minlat, maxlat, minlon, maxlon]
+            name = data[0]["display_name"].split(",")[0]
+            lo, la, hi, ha = float(bb[2]), float(bb[0]), float(bb[3]), float(bb[1])
+            # Very large bboxes (whole countries) → 0.3° box around centroid
+            if (hi - lo) > 2 or (ha - la) > 2:
+                cx, cy = (lo + hi) / 2, (la + ha) / 2
+                lo, la, hi, ha = cx - 0.3, cy - 0.3, cx + 0.3, cy + 0.3
+            return {"name": name, "bbox": [lo, la, hi, ha]}
+    except Exception:
+        pass
+    return None
+
+
+def _aoi_map_fig(lon0: float, lat0: float, lon1: float, lat1: float,
+                 height: int = 420, scenes: list | None = None) -> go.Figure:
+    cx   = (lon0 + lon1) / 2
+    cy   = (lat0 + lat1) / 2
+    span = max(lon1 - lon0, lat1 - lat0, 0.001)
+    zoom = float(np.clip(10 - 3 * np.log10(span), 1, 15))
+
+    fig = go.Figure()
+    fig.add_trace(go.Scattermap(
+        lon=[lon0, lon1, lon1, lon0, lon0],
+        lat=[lat0, lat0, lat1, lat1, lat0],
+        mode="lines",
+        line=dict(width=2, color="#e8a020"),
+        fill="toself",
+        fillcolor="rgba(232,160,32,0.08)",
+        name="AOI",
+        hoverinfo="skip",
+    ))
+    if scenes:
+        s_lons  = [(s["bbox"][0] + s["bbox"][2]) / 2 for s in scenes if s.get("bbox")]
+        s_lats  = [(s["bbox"][1] + s["bbox"][3]) / 2 for s in scenes if s.get("bbox")]
+        s_texts = [
+            f'{s.get("id","")[:24]}<br>Cloud: {s.get("cloud_cover",0):.0f}%  '
+            f'Q: {s.get("quality_score",0):.1f}'
+            for s in scenes if s.get("bbox")
+        ]
+        if s_lons:
+            fig.add_trace(go.Scattermap(
+                lon=s_lons, lat=s_lats,
+                mode="markers",
+                marker=dict(size=8, color="#e8a020", opacity=0.75),
+                text=s_texts, hoverinfo="text",
+                name="Scenes",
+            ))
+    _layout = _plotly_fin()
+    _layout["margin"] = dict(l=0, r=0, t=0, b=0)
+    fig.update_layout(
+        **_layout,
+        height=height,
+        map=dict(
+            style="open-street-map",
+            center=dict(lat=cy, lon=cx),
+            zoom=zoom,
+        ),
+        showlegend=False,
+    )
+    return fig
+
+
 # ── Static data ───────────────────────────────────────────────────────────────
 PRESETS: dict[str, dict] = {
     "rotterdam_port":  {"name": "Rotterdam Port",       "bbox": [3.90, 51.82, 4.65, 52.08]},
@@ -279,16 +353,18 @@ CCOLORS = {
 }
 
 # ── Session-state init ────────────────────────────────────────────────────────
-_SV = "v5"
+_SV = "v6"
 if st.session_state.get("_sv") != _SV:
     st.session_state.clear()
     st.session_state["_sv"] = _SV
 
 _DEFAULTS: dict = {
-    "_px":   0,                 # Custom AOI — user picks their own location
-    "_aoi":  "Custom AOI",
-    "_lon0": 3.90, "_lat0": 51.82,
-    "_lon1": 4.65, "_lat1": 52.08,
+    "_px":    0,
+    "_aoi":   "Custom AOI",
+    "_lon0":  3.90, "_lat0": 51.82,
+    "_lon1":  4.65, "_lat1": 52.08,
+    "_loc_gen": 0,          # bumped whenever geocoder/preset changes location
+    "_geo_error": False,
     "result": None, "run_error": None,
 }
 for _k, _v in _DEFAULTS.items():
@@ -303,9 +379,9 @@ def _apply_preset() -> None:
         st.session_state.update(
             _lon0=b[0], _lat0=b[1], _lon1=b[2], _lat1=b[3],
             _aoi=PRESETS[key]["name"],
+            _loc_gen=st.session_state["_loc_gen"] + 1,
         )
-    else:
-        st.session_state["_aoi"] = "Custom AOI"
+    # Custom selected: keep whatever name + bbox is currently set
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -320,36 +396,87 @@ with st.sidebar:
     )
     st.divider()
 
-    st.markdown(_sec("Area of Interest"), unsafe_allow_html=True)
-    st.selectbox("Preset AOI", range(len(_PLABELS)),
-                 format_func=lambda i: _PLABELS[i],
-                 key="_px", on_change=_apply_preset)
+    # ── Location search ───────────────────────────────────────────────────────
+    st.markdown(_sec("Location"), unsafe_allow_html=True)
+    _lg = st.session_state["_loc_gen"]
 
-    # Show active AOI name and bbox so there is never any ambiguity
-    _cur_aoi  = str(st.session_state.get("_aoi", ""))
-    _cur_bbox = (f'{st.session_state["_lon0"]:.2f}, {st.session_state["_lat0"]:.2f}, '
-                 f'{st.session_state["_lon1"]:.2f}, {st.session_state["_lat1"]:.2f}')
+    _gc1, _gc2 = st.columns([3, 1])
+    _geo_query = _gc1.text_input(
+        "Search", key="_geo_query",
+        placeholder="Search any port or city…",
+        label_visibility="collapsed",
+    )
+    _gc2.markdown("<div style='margin-top:5px'></div>", unsafe_allow_html=True)
+    if _gc2.button("Find", use_container_width=True):
+        st.session_state["_geo_error"] = False
+        _geo_res = _geocode_sync(_geo_query or "")
+        if _geo_res:
+            _gb = _geo_res["bbox"]
+            st.session_state.update(
+                _lon0=_gb[0], _lat0=_gb[1], _lon1=_gb[2], _lat1=_gb[3],
+                _aoi=_geo_res["name"], _px=0,
+                _loc_gen=_lg + 1,
+            )
+            st.rerun()
+        else:
+            st.session_state["_geo_error"] = True
+            st.rerun()
+
+    if st.session_state["_geo_error"]:
+        st.warning("Location not found — try a different name.")
+
+    # ── Quick-select presets ───────────────────────────────────────────────────
     st.markdown(
-        f'<div style="background:#0a0a0a;border:1px solid #1c1c1c;'
-        f'padding:10px 12px;margin-top:4px">'
-        f'<div style="font-size:12px;font-weight:600;color:#f0ede8;margin-bottom:4px">'
-        f'{_cur_aoi}</div>'
+        '<div style="font-size:9px;color:#333333;letter-spacing:0.1em;'
+        'text-transform:uppercase;margin:10px 0 4px">or choose a preset</div>',
+        unsafe_allow_html=True,
+    )
+    st.selectbox("Preset", range(len(_PLABELS)),
+                 format_func=lambda i: _PLABELS[i],
+                 key="_px", on_change=_apply_preset,
+                 label_visibility="collapsed")
+
+    # ── Active location — generation-keyed so geocoder/preset always wins ─────
+    _lg = st.session_state["_loc_gen"]   # re-read after selectbox may have bumped it
+
+    _name_val = st.text_input(
+        "Name", key=f"w_aoi_{_lg}",
+        value=st.session_state.get("_aoi", ""),
+        placeholder="Enter location name",
+        label_visibility="collapsed",
+    )
+    st.session_state["_aoi"] = _name_val or "Custom AOI"
+
+    _cur_bbox = (f'{st.session_state["_lon0"]:.3f}, {st.session_state["_lat0"]:.3f}'
+                 f'  —  {st.session_state["_lon1"]:.3f}, {st.session_state["_lat1"]:.3f}')
+    st.markdown(
         f'<div style="font-size:9px;color:#4a4440;font-variant-numeric:tabular-nums;'
-        f'letter-spacing:0.04em">{_cur_bbox}</div>'
-        f'</div>',
+        f'padding:2px 0 10px">{_cur_bbox}</div>',
         unsafe_allow_html=True,
     )
 
-    with st.expander("Edit Bounding Box", expanded=False):
+    # ── Mini map ──────────────────────────────────────────────────────────────
+    _mlon0 = float(st.session_state["_lon0"])
+    _mlat0 = float(st.session_state["_lat0"])
+    _mlon1 = float(st.session_state["_lon1"])
+    _mlat1 = float(st.session_state["_lat1"])
+    if _mlon0 < _mlon1 and _mlat0 < _mlat1:
+        st.plotly_chart(
+            _aoi_map_fig(_mlon0, _mlat0, _mlon1, _mlat1, height=180),
+            use_container_width=True, config={"displayModeBar": False},
+        )
+
+    with st.expander("Edit Coordinates", expanded=False):
         c1, c2 = st.columns(2)
-        c1.number_input("Min Lon", key="_lon0", step=0.0001, format="%.4f",
-                        min_value=-180.0, max_value=180.0)
-        c2.number_input("Min Lat", key="_lat0", step=0.0001, format="%.4f",
-                        min_value=-90.0, max_value=90.0)
-        c1.number_input("Max Lon", key="_lon1", step=0.0001, format="%.4f",
-                        min_value=-180.0, max_value=180.0)
-        c2.number_input("Max Lat", key="_lat1", step=0.0001, format="%.4f",
-                        min_value=-90.0, max_value=90.0)
+        _nlon0 = c1.number_input("Min Lon", value=_mlon0, step=0.0001, format="%.4f",
+                                  min_value=-180.0, max_value=180.0, key=f"w_lon0_{_lg}")
+        _nlat0 = c2.number_input("Min Lat", value=_mlat0, step=0.0001, format="%.4f",
+                                  min_value=-90.0,  max_value=90.0,  key=f"w_lat0_{_lg}")
+        _nlon1 = c1.number_input("Max Lon", value=_mlon1, step=0.0001, format="%.4f",
+                                  min_value=-180.0, max_value=180.0, key=f"w_lon1_{_lg}")
+        _nlat1 = c2.number_input("Max Lat", value=_mlat1, step=0.0001, format="%.4f",
+                                  min_value=-90.0,  max_value=90.0,  key=f"w_lat1_{_lg}")
+        st.session_state.update(_lon0=_nlon0, _lat0=_nlat0, _lon1=_nlon1, _lat1=_nlat1)
 
     st.markdown(_sec("Scene Parameters"), unsafe_allow_html=True)
     days_back = st.slider("Days Back",   7,  90, 45)
@@ -449,7 +576,7 @@ async def _analyse(bbox: list, name: str, days: int, cloud: float, lim: int) -> 
                     axis=2,
                 )
                 change_geojson = cell_geojson(diff, bbox)
-                change_img     = draw_difference_preview(lat_pil, diff)
+                change_img     = draw_difference_preview(a, diff)
                 n              = len(change_geojson["features"])
                 change_status  = "ok"
                 change_summary = (
@@ -465,7 +592,12 @@ async def _analyse(bbox: list, name: str, days: int, cloud: float, lim: int) -> 
     )
     vlm_pkt = build_vlm_packet(
         name, bbox, latest, previous,
-        {"status": change_status, "summary": change_summary},
+        {
+            "status":  change_status,
+            "summary": change_summary,
+            "geojson": change_geojson,
+            "method":  "thumbnail_preview_difference" if change_status == "ok" else "none",
+        },
     )
     return {
         "scenes": scenes, "latest": latest, "previous": previous,
@@ -560,13 +692,51 @@ else:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
-    t1, t2, t3, t4, t5 = st.tabs([
+    t0, t1, t2, t3, t4, t5 = st.tabs([
+        "Map View",
         "Scene Intelligence",
         "Change Detection",
         "Collection Schedule",
         "Evidence Record",
         "Industries",
     ])
+
+    # ── Tab 0 — Map View ─────────────────────────────────────────────────────
+    with t0:
+        try:
+            _mlon0 = float(st.session_state["_lon0"])
+            _mlat0 = float(st.session_state["_lat0"])
+            _mlon1 = float(st.session_state["_lon1"])
+            _mlat1 = float(st.session_state["_lat1"])
+            mc1, mc2 = st.columns([4, 1])
+            with mc1:
+                st.markdown(_sec(f"AOI — {st.session_state.get('_aoi','Custom AOI')}"),
+                            unsafe_allow_html=True)
+            with mc2:
+                st.markdown(
+                    f'<div style="font-size:9px;color:#4a4440;text-align:right;'
+                    f'padding-top:22px;font-variant-numeric:tabular-nums">'
+                    f'{_mlon0:.3f}, {_mlat0:.3f} → {_mlon1:.3f}, {_mlat1:.3f}</div>',
+                    unsafe_allow_html=True,
+                )
+            st.plotly_chart(
+                _aoi_map_fig(_mlon0, _mlat0, _mlon1, _mlat1,
+                             height=520, scenes=scenes),
+                use_container_width=True,
+                config={"displayModeBar": True, "scrollZoom": True},
+            )
+            st.markdown(
+                _note(
+                    "Amber box = AOI bounding box · "
+                    "dots = Sentinel-2 scene centres · "
+                    "hover dots for scene ID and cloud cover · "
+                    "scroll to zoom · drag to pan"
+                ),
+                unsafe_allow_html=True,
+            )
+        except Exception as exc:
+            st.error(f"Map View error: {exc}")
+            st.code(traceback.format_exc())
 
     # ── Tab 1 — Scene Intelligence ────────────────────────────────────────────
     with t1:
