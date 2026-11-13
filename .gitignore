@@ -1,13 +1,19 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
+*.pyd
 .venv/
 venv/
 .env
+.env.*
 *.egg-info/
 dist/
 build/
+
+# Generated change-preview images
+backend/static/jobs/
 
 # Node
 node_modules/
@@ -20,5 +26,5 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Docker volumes
+# Logs
 *.log
