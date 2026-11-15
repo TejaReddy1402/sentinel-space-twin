@@ -515,7 +515,7 @@ with hc2:
     st.markdown(
         f'<div style="text-align:right;color:#333333;font-size:10px;'
         f'padding-top:14px;letter-spacing:0.08em;font-variant-numeric:tabular-nums">'
-        f'{dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M")} UTC</div>',
+        f'{dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M")} UTC</div>',
         unsafe_allow_html=True,
     )
 st.divider()
@@ -1028,7 +1028,7 @@ else:
                         tooltip=tooltip,
                         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
                     ),
-                    use_container_width=True,
+                    width="stretch",
                     height=520,
                 )
 

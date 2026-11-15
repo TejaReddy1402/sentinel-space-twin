@@ -217,7 +217,7 @@ def segment_image(
     use_sam = _load_sam()
     if use_sam and _sam_gen is not None:
         try:
-            raw = _sam_gen.generate(arr)
+            raw = _sam_gen.generate(np.ascontiguousarray(arr, dtype=np.uint8))
             raw.sort(key=lambda m: m["area"], reverse=True)
             masks: list[np.ndarray] = [m["segmentation"] for m in raw[:max_segments]]
             method = "mobile_sam"
