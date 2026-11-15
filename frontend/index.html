@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.7/dist.min.js"></script>
 <style>
 :root{
   --bg:#040c18;--sur:#07152a;--sur2:#0c1f38;--sur3:#111f33;
@@ -192,6 +193,16 @@ button{font-family:inherit;cursor:pointer}
 .btn-link{background:none;border:1px solid var(--bdr);color:var(--txt2);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:8px;font-family:inherit;transition:all .18s}
 .btn-link:hover{border-color:var(--acc);color:var(--acc)}
 
+/* ---- 3D MAP ---- */
+#map-3d{position:absolute;inset:0;display:none;background:#040e1c}
+.btn-3d{background:rgba(14,165,233,.18);border:1px solid var(--acc);color:var(--acc2);font-size:10px;font-weight:700;letter-spacing:.06em;padding:5px 12px;border-radius:7px;cursor:pointer;font-family:inherit;transition:all .18s;white-space:nowrap}
+.btn-3d:hover{background:rgba(14,165,233,.32)}
+.btn-3d.active{background:var(--acc);color:#000}
+.mover-tl{left:12px;top:12px}
+/* ---- SEGMENTS TAB ---- */
+.seg-cls-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:11px}
+.seg-change-row{padding:6px 0;border-bottom:1px solid var(--bdr)}
+.seg-tip{margin-top:12px;padding:8px;background:rgba(245,182,76,.07);border:1px solid rgba(245,182,76,.2);border-radius:6px;font-size:10px;color:var(--amb);line-height:1.5}
 /* ---- FOOTER ---- */
 .footer{border-top:1px solid var(--bdr);padding:20px;text-align:center;font-size:11px;color:var(--muted)}
 </style>
@@ -271,6 +282,10 @@ button{font-family:inherit;cursor:pointer}
       <!-- Center: Map -->
       <div class="dp dash-map">
         <div id="map"></div>
+        <div id="map-3d"></div>
+        <div class="mover mover-tl" style="padding:6px 8px">
+          <button id="btn3d" class="btn-3d" onclick="toggle3D()">3D Map</button>
+        </div>
         <div class="mover map-st">
           <b id="mapTitle">No AOI loaded</b>
           <div id="mapDesc">Run data enhancement to draw AOI, scene footprints and change cells.</div>
@@ -280,6 +295,7 @@ button{font-family:inherit;cursor:pointer}
           <div class="lg-row"><span class="lg-sw" style="border:2px solid var(--acc)"></span>AOI searched</div>
           <div class="lg-row"><span class="lg-sw" style="border:2px solid var(--grn)"></span>Satellite scene footprint</div>
           <div class="lg-row"><span class="lg-sw" style="background:rgba(245,182,76,.75)"></span>Preview-level changed cells</div>
+          <div class="lg-row" id="lgSAM" style="display:none"><span class="lg-sw" style="background:rgba(139,92,246,.7)"></span>SAM segments (3D)</div>
         </div>
       </div>
 
@@ -290,6 +306,7 @@ button{font-family:inherit;cursor:pointer}
           <button class="dash-tab" data-tab="record">Record</button>
           <button class="dash-tab" data-tab="visibility">Visibility</button>
           <button class="dash-tab" data-tab="vlm">VLM</button>
+          <button class="dash-tab" data-tab="segments">3D SAM</button>
         </div>
         <div class="dash-tb">
 
@@ -327,6 +344,15 @@ button{font-family:inherit;cursor:pointer}
             <div class="dst">VLM / LLM input packet</div>
             <div style="color:var(--muted);font-size:11px;margin-bottom:8px;line-height:1.5">Input packet for Qwen2.5-VL / InternVL / LLaVA. The VLM explains evidence; it does not invent resolution.</div>
             <div id="vlmPacket" class="code-blk">Run analysis first.</div>
+          </div>
+
+          <!-- 3D SAM segments -->
+          <div id="tab-segments" class="dtc">
+            <div class="dst">SAM Segmentation + 3D Mapping</div>
+            <div id="seg-status" style="color:var(--muted);font-size:11px;margin-bottom:8px;line-height:1.5">
+              Run analysis to trigger automatic segmentation. Click <b>3D Map</b> on the map to view extruded land-cover segments.
+            </div>
+            <div id="seg-content"></div>
           </div>
 
         </div>
@@ -418,10 +444,12 @@ button{font-family:inherit;cursor:pointer}
 
 <script>
 const API = (() => {
+  // Dev: nginx on :8080 proxies to backend on :8787
   if (window.location.hostname === 'localhost' && window.location.port === '8080') {
     return 'http://localhost:8787';
   }
-  return window.location.port ? `${window.location.protocol}//${window.location.hostname}:8787` : '';
+  // Single-service (local :8787 or production): same-origin
+  return '';
 })();
 
 /* ---- Clock ---- */
@@ -735,6 +763,242 @@ async function loadIndustries(){
   }
 }
 loadIndustries();
+
+/* ============================================================
+   3D MAP (deck.gl) + SAM SEGMENTATION
+   ============================================================ */
+
+let _deckgl      = null;   // deck.DeckGL instance
+let _is3D        = false;
+let _samSegments = null;   // GeoJSON FeatureCollection from /api/segment
+let _changeCells = null;   // change GeoJSON from last analysis
+let _lastBbox    = null;
+
+/* ---- 3D toggle ---- */
+function toggle3D() {
+  _is3D = !_is3D;
+  const mapEl  = document.getElementById('map');
+  const map3El = document.getElementById('map-3d');
+  const btn    = document.getElementById('btn3d');
+  const lgSAM  = document.getElementById('lgSAM');
+
+  if (_is3D) {
+    mapEl.style.visibility = 'hidden';
+    map3El.style.display   = 'block';
+    btn.textContent        = '2D Map';
+    btn.classList.add('active');
+    if (lgSAM) lgSAM.style.display = 'flex';
+    if (!_deckgl) _init3D(); else _update3DLayers();
+  } else {
+    mapEl.style.visibility = '';
+    map3El.style.display   = 'none';
+    btn.textContent        = '3D Map';
+    btn.classList.remove('active');
+    if (lgSAM) lgSAM.style.display = 'none';
+  }
+}
+
+/* ---- deck.gl initialisation ---- */
+function _init3D() {
+  const c    = map.getCenter();
+  const zoom = map.getZoom();
+
+  _deckgl = new deck.DeckGL({
+    container: document.getElementById('map-3d'),
+    initialViewState: {
+      latitude:  c.lat,
+      longitude: c.lng,
+      zoom:      zoom,
+      pitch:     45,
+      bearing:   0,
+      maxPitch:  85,
+    },
+    controller: { dragRotate: true, touchRotate: true },
+    layers: _build3DLayers(),
+    getTooltip: ({ object }) => {
+      if (!object || !object.properties) return null;
+      const p = object.properties;
+      return {
+        html: `<div style="padding:8px 10px;background:#07152a;color:#e2f0ff;border:1px solid #1a3050;border-radius:8px;font-size:11px;line-height:1.6">
+          <b style="color:#38bdf8">${(p.land_cover || 'area').replace('_', ' ')}</b><br>
+          Height: ${(p.height || 0).toFixed(0)} m<br>
+          Change: ${((p.change_score || 0) * 100).toFixed(1)} %<br>
+          Area: ${(p.area_pct || 0).toFixed(1)} %
+        </div>`,
+        style: { background: 'transparent', boxShadow: 'none', padding: 0 },
+      };
+    },
+  });
+}
+
+/* ---- build layers ---- */
+function _buildTileLayer() {
+  return new deck.TileLayer({
+    id: 'basemap',
+    data: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    minZoom: 0,
+    maxZoom: 19,
+    tileSize: 256,
+    renderSubLayers: props => {
+      const { west, south, east, north } = props.tile.bbox;
+      return new deck.BitmapLayer(props, {
+        data: null,
+        image: props.data,
+        bounds: [west, south, east, north],
+      });
+    },
+  });
+}
+
+function _build3DLayers() {
+  const layers = [_buildTileLayer()];
+
+  if (_samSegments && _samSegments.features && _samSegments.features.length) {
+    layers.push(new deck.GeoJsonLayer({
+      id: 'sam-segments',
+      data: _samSegments,
+      pickable: true,
+      stroked: true,
+      filled: true,
+      extruded: true,
+      getElevation: f => f.properties.height || 0,
+      getFillColor: f => f.properties.color || [120, 120, 140, 180],
+      getLineColor: [255, 255, 255, 40],
+      lineWidthMinPixels: 1,
+      material: { ambient: 0.4, diffuse: 0.6, shininess: 32 },
+      updateTriggers: { getElevation: _samSegments, getFillColor: _samSegments },
+    }));
+  }
+
+  if (_changeCells && _changeCells.features && _changeCells.features.length) {
+    layers.push(new deck.GeoJsonLayer({
+      id: 'change-cells',
+      data: _changeCells,
+      pickable: false,
+      stroked: false,
+      filled: true,
+      extruded: true,
+      getElevation: f => (f.properties.change_score || 0) * 300,
+      getFillColor: f => {
+        const s = f.properties.change_score || 0;
+        return [245, 182, 76, Math.min(230, Math.floor(s * 200 + 60))];
+      },
+    }));
+  }
+
+  return layers;
+}
+
+function _update3DLayers() {
+  if (!_deckgl) return;
+  _deckgl.setProps({ layers: _build3DLayers() });
+}
+
+/* ---- SAM segmentation ---- */
+async function fetchSegments(data) {
+  const statusEl  = document.getElementById('seg-status');
+  const contentEl = document.getElementById('seg-content');
+  if (!statusEl || !contentEl) return;
+
+  _changeCells = data.change?.geojson || null;
+  _lastBbox    = data.aoi?.bbox || null;
+
+  const lat  = data.selected?.latest;
+  const prev = data.selected?.previous;
+  const latUrl  = pickThumb(lat);
+  const prevUrl = pickThumb(prev);
+
+  if (!latUrl) {
+    statusEl.textContent = 'No thumbnail available for segmentation.';
+    return;
+  }
+
+  statusEl.innerHTML = '<span style="color:var(--acc)">Running SAM segmentation…</span>';
+  contentEl.innerHTML = '';
+
+  try {
+    const res = await fetch(`${API}/api/segment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bbox:         data.aoi.bbox,
+        latest_url:   latUrl,
+        previous_url: prevUrl || null,
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const segData = await res.json();
+
+    _samSegments = segData.segments;
+    if (_is3D) _update3DLayers();
+
+    statusEl.innerHTML = '';
+    _renderSegments(segData);
+  } catch (e) {
+    statusEl.innerHTML = `<span style="color:var(--amb)">Segmentation: ${e.message}</span>`;
+  }
+}
+
+function _renderSegments(segData) {
+  const el    = document.getElementById('seg-content');
+  if (!el) return;
+  const feats  = segData.segments?.features || [];
+  const method = segData.method || 'unknown';
+  const methodLabel = method === 'mobile_sam' ? 'MobileSAM ✓'
+                    : method === 'slic'        ? 'SLIC superpixels'
+                    : method === 'slic_fallback' ? 'SLIC (SAM fallback)'
+                    : method;
+
+  const lcColour = {
+    water:       'var(--acc)',
+    vegetation:  'var(--grn)',
+    urban:       'var(--muted)',
+    bare_ground: 'var(--amb)',
+    cloud_snow:  'var(--txt)',
+    unknown:     'var(--bdr2)',
+  };
+
+  // Count by class
+  const counts = {};
+  feats.forEach(f => {
+    const lc = f.properties.land_cover || 'unknown';
+    counts[lc] = (counts[lc] || 0) + 1;
+  });
+
+  // Top changed
+  const changed = feats
+    .filter(f => f.properties.change_score > 0.04)
+    .sort((a, b) => b.properties.change_score - a.properties.change_score)
+    .slice(0, 5);
+
+  el.innerHTML = `
+    <div class="dst">Method: <span style="color:var(--acc)">${methodLabel}</span></div>
+    <div style="font-size:11px;color:var(--txt2);margin-bottom:10px">${feats.length} segments detected</div>
+    <div class="dst">Land cover</div>
+    ${Object.entries(counts).map(([cls, cnt]) => `
+      <div class="seg-cls-row">
+        <span style="color:${lcColour[cls] || 'var(--txt2)'}">■ ${cls.replace('_', ' ')}</span>
+        <span style="color:var(--txt2)">${cnt}</span>
+      </div>`).join('')}
+    <div class="dst" style="margin-top:12px">Top changed segments</div>
+    ${changed.length ? changed.map(f => `
+      <div class="seg-change-row">
+        <div style="font-size:11px;color:var(--amb)">${f.properties.land_cover?.replace('_',' ')} · Δ ${(f.properties.change_score*100).toFixed(1)}%</div>
+        <div style="font-size:10px;color:var(--muted)">${f.properties.height?.toFixed(0)}m extrusion · ${f.properties.area_pct?.toFixed(1)}% area</div>
+      </div>`).join('') : '<div style="font-size:11px;color:var(--muted)">No significant changes detected.</div>'}
+    ${!segData.sam_available ? `<div class="seg-tip">Install MobileSAM for higher-quality segmentation:<br><code>pip install mobile-sam</code></div>` : ''}
+    <div style="margin-top:12px;font-size:10px;color:var(--muted)">Click <b>3D Map</b> on the map to view segments extruded by land-cover height.</div>`;
+}
+
+/* Hook fetchSegments into the main run() pipeline (fire-and-forget) */
+const _origRun = run;
+// Override renderSummary to also kick off segmentation after each analysis
+const _origRenderSummary = renderSummary;
+function renderSummary(data) {
+  _origRenderSummary(data);
+  // Kick off segmentation asynchronously; don't block the UI
+  setTimeout(() => fetchSegments(data).catch(() => {}), 0);
+}
 
 </script>
 </body>

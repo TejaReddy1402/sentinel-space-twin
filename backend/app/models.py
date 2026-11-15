@@ -23,6 +23,21 @@ class AnalyzeRequest(BaseModel):
         return self
 
 
+class SegmentRequest(BaseModel):
+    bbox: Annotated[list[float], Field(min_length=4, max_length=4)]
+    latest_url: str = Field(..., min_length=10, max_length=1024)
+    previous_url: str | None = Field(default=None, max_length=1024)
+
+    @model_validator(mode="after")
+    def _validate_bbox(self) -> "SegmentRequest":
+        min_lon, min_lat, max_lon, max_lat = self.bbox
+        if not (-180.0 <= min_lon < max_lon <= 180.0):
+            raise ValueError("bbox longitude must satisfy -180 ≤ minLon < maxLon ≤ 180")
+        if not (-90.0 <= min_lat < max_lat <= 90.0):
+            raise ValueError("bbox latitude must satisfy -90 ≤ minLat < maxLat ≤ 90")
+        return self
+
+
 class SceneSummary(BaseModel):
     id: str
     datetime: str | None = None

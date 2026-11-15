@@ -584,6 +584,28 @@ async def _analyse(bbox: list, name: str, days: int, cloud: float, lim: int) -> 
                     if n else "No significant preview-level changes detected."
                 )
 
+    # SAM segmentation (best-effort — SLIC fallback if SAM unavailable)
+    seg_data: dict | None = None
+    elevation_data: dict | None = None
+    try:
+        from app.sam_segmentation import segment_image as _seg_fn
+        from app.elevation import fetch_elevation_grid as _fetch_elev
+        _lurl = pick_thumbnail(latest) if latest else None
+        if _lurl:
+            _limg = await fetch_image(_lurl)
+            _purl = pick_thumbnail(previous) if previous else None
+            _pimg = await fetch_image(_purl) if _purl else None
+            if _limg:
+                _loop = asyncio.get_running_loop()
+                _limg_snap = _limg
+                _pimg_snap = _pimg
+                seg_data = await _loop.run_in_executor(
+                    None, lambda: _seg_fn(_limg_snap, bbox, _pimg_snap)
+                )
+                elevation_data = await _fetch_elev(bbox)
+    except Exception as _exc:
+        logging.warning("SAM segmentation skipped: %s", _exc)
+
     cw       = collection_windows_for_aoi(bbox)
     evidence = generate_record(
         aoi_name=name, bbox=bbox,
@@ -607,6 +629,7 @@ async def _analyse(bbox: list, name: str, days: int, cloud: float, lim: int) -> 
         "indices": production_indices(), "vis_matrix": visibility_matrix(),
         "relaxed_cloud": relaxed_cloud,
         "relaxed_days":  relaxed_days,
+        "seg_data": seg_data, "elevation_data": elevation_data,
     }
 
 
@@ -692,10 +715,11 @@ else:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
-    t0, t1, t2, t3, t4, t5 = st.tabs([
+    t0, t1, t2, t3, t4, t5, t6 = st.tabs([
         "Map View",
         "Scene Intelligence",
         "Change Detection",
+        "3D SAM",
         "Collection Schedule",
         "Evidence Record",
         "Industries",
@@ -903,8 +927,138 @@ else:
             st.error(f"Change Detection error: {exc}")
             st.code(traceback.format_exc())
 
-    # ── Tab 3 — Collection Schedule ───────────────────────────────────────────
+    # ── Tab 3 — 3D SAM ────────────────────────────────────────────────────────
     with t3:
+        try:
+            import pydeck as pdk
+
+            seg = r.get("seg_data")
+            elev = r.get("elevation_data")
+
+            if not seg or not seg.get("features"):
+                st.info(
+                    "3D SAM segmentation is not available for this scene.  "
+                    "scikit-image is required; torch + mobile-sam enable higher-quality SAM "
+                    "segments (otherwise SLIC superpixels are used as a fallback)."
+                )
+            else:
+                features = seg.get("features", [])
+                method = seg.get("method", "unknown")
+                seg_count = seg.get("segment_count", 0)
+                sam_ok = seg.get("sam_available", False)
+
+                sm1, sm2, sm3 = st.columns(3)
+                sm1.metric("Segments", seg_count)
+                sm2.metric("Method", method.replace("_", " ").title())
+                sm3.metric("SAM Engine", "MobileSAM" if sam_ok else "SLIC Fallback")
+
+                st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
+
+                _blon0 = float(st.session_state["_lon0"])
+                _blat0 = float(st.session_state["_lat0"])
+                _blon1 = float(st.session_state["_lon1"])
+                _blat1 = float(st.session_state["_lat1"])
+                center_lon = (_blon0 + _blon1) / 2
+                center_lat = (_blat0 + _blat1) / 2
+
+                geojson_fc = {"type": "FeatureCollection", "features": features}
+                seg_layer = pdk.Layer(
+                    "GeoJsonLayer",
+                    data=geojson_fc,
+                    pickable=True,
+                    stroked=True,
+                    filled=True,
+                    extruded=True,
+                    get_elevation="@@=properties.height",
+                    elevation_scale=10,
+                    get_fill_color="@@=properties.color",
+                    get_line_color=[60, 60, 80, 200],
+                    line_width_min_pixels=1,
+                    opacity=0.75,
+                )
+                view = pdk.ViewState(
+                    longitude=center_lon,
+                    latitude=center_lat,
+                    zoom=11,
+                    pitch=45,
+                    bearing=0,
+                )
+                tooltip = {
+                    "html": (
+                        "<b style='color:#e8a020'>{properties.land_cover}</b><br/>"
+                        "Height: {properties.height} m<br/>"
+                        "Change: {properties.change_score}<br/>"
+                        "Area: {properties.area_pct}%"
+                    ),
+                    "style": {
+                        "backgroundColor": "#0d0d0d",
+                        "color": "#f0ede8",
+                        "fontSize": "12px",
+                        "padding": "8px",
+                        "border": "1px solid #262626",
+                    },
+                }
+                st.pydeck_chart(
+                    pdk.Deck(
+                        layers=[seg_layer],
+                        initial_view_state=view,
+                        tooltip=tooltip,
+                        map_style="carto-darkmatter",
+                    ),
+                    use_container_width=True,
+                    height=520,
+                )
+
+                st.markdown(_sec("Land Cover Breakdown"), unsafe_allow_html=True)
+                lc_colors = {
+                    "water":       "#1e6edc",
+                    "vegetation":  "#1eaf41",
+                    "bare_ground": "#c8a050",
+                    "urban":       "#969698",
+                    "cloud_snow":  "#dce6ff",
+                    "unknown":     "#787882",
+                }
+                lc_counts: dict[str, int] = {}
+                lc_area: dict[str, float] = {}
+                for f in features:
+                    lc = f["properties"]["land_cover"]
+                    lc_counts[lc] = lc_counts.get(lc, 0) + 1
+                    lc_area[lc] = lc_area.get(lc, 0.0) + f["properties"].get("area_pct", 0.0)
+
+                sorted_lc = sorted(lc_counts.items(), key=lambda x: -x[1])
+                lc_cols = st.columns(min(len(sorted_lc), 6))
+                for idx, (lc, cnt) in enumerate(sorted_lc):
+                    col = lc_colors.get(lc, "#888888")
+                    with lc_cols[idx % len(lc_cols)]:
+                        st.markdown(
+                            f'<div style="background:#0a0a0a;border:1px solid #1c1c1c;'
+                            f'border-top:3px solid {col};padding:12px;text-align:center;'
+                            f'margin-bottom:8px">'
+                            f'<div style="font-size:9px;color:#4a4440;text-transform:uppercase;'
+                            f'letter-spacing:0.12em">{lc.replace("_"," ")}</div>'
+                            f'<div style="font-size:20px;font-weight:700;color:#f0ede8;'
+                            f'margin:4px 0 2px">{cnt}</div>'
+                            f'<div style="font-size:9px;color:#a09890">'
+                            f'{lc_area.get(lc, 0):.1f}% area</div>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                if elev:
+                    st.markdown(_sec("Terrain Elevation (SRTM 30m)"),
+                                unsafe_allow_html=True)
+                    ec1, ec2, ec3, ec4 = st.columns(4)
+                    ec1.metric("Min", f'{elev.get("min_elevation", 0):.0f} m')
+                    ec2.metric("Max", f'{elev.get("max_elevation", 0):.0f} m')
+                    ec3.metric("Range", f'{elev.get("elevation_range", 0):.0f} m')
+                    ec4.metric("Source", str(elev.get("source", "SRTM")).upper())
+
+        except Exception as exc:
+            st.error(f"3D SAM error: {exc}")
+            st.code(traceback.format_exc())
+
+    # ── Tab 4 — Collection Schedule ───────────────────────────────────────────
+    with t4:
         try:
             sc1, sc2 = st.columns([1, 3])
             with sc1:
@@ -969,8 +1123,8 @@ else:
             st.error(f"Collection Schedule error: {exc}")
             st.code(traceback.format_exc())
 
-    # ── Tab 4 — Evidence Record ───────────────────────────────────────────────
-    with t4:
+    # ── Tab 5 — Evidence Record ───────────────────────────────────────────────
+    with t5:
         try:
             ev = r.get("evidence", {})
             ec1, ec2 = st.columns(2)
@@ -1017,8 +1171,8 @@ else:
             st.error(f"Evidence Record error: {exc}")
             st.code(traceback.format_exc())
 
-    # ── Tab 5 — Industries ────────────────────────────────────────────────────
-    with t5:
+    # ── Tab 6 — Industries ────────────────────────────────────────────────────
+    with t6:
         try:
             st.markdown(
                 '<div style="font-size:9px;color:#333333;letter-spacing:0.14em;'

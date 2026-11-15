@@ -15,6 +15,9 @@ build/
 # Generated change-preview images
 backend/static/jobs/
 
+# SAM model weights — downloaded at runtime via HuggingFace Hub
+backend/models/
+
 # Node
 node_modules/
 

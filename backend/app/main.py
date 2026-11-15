@@ -20,7 +20,7 @@ from .constellations import CONSTELLATION_DEFS, INDUSTRIES, collection_windows_f
 from .constants import DEFAULT_BBOX
 from .enhancement import preview_change, production_indices, visibility_matrix
 from .evidence import _aoi_code, generate_record
-from .models import AnalyzeRequest
+from .models import AnalyzeRequest, SegmentRequest
 from .stac_client import search_sentinel2, summarize_feature
 from .vlm import build_vlm_packet
 
@@ -153,6 +153,50 @@ def maritime() -> dict[str, Any]:
             "Alerts for high-risk corridors and supply-chain disruption",
             "Dark vessel detection via SAR when AIS is switched off",
         ],
+    }
+
+
+@app.post("/api/segment", tags=["analysis"])
+async def segment(req: SegmentRequest) -> dict[str, Any]:
+    """
+    Run SAM/SLIC segmentation on a satellite scene thumbnail.
+
+    Downloads the provided URL(s), segments the image, geo-references each
+    segment to the bbox, and returns a GeoJSON FeatureCollection with
+    land-cover labels, 3-D heights and change scores.
+    Also returns a SRTM elevation grid for terrain-aware 3-D rendering.
+    """
+    import asyncio
+    from .elevation import fetch_elevation_grid
+    from .enhancement import fetch_image
+    from .sam_segmentation import segment_image
+
+    latest_img = await fetch_image(req.latest_url)
+    if latest_img is None:
+        raise HTTPException(status_code=422, detail="Could not download latest_url image.")
+
+    previous_img = None
+    if req.previous_url:
+        previous_img = await fetch_image(req.previous_url)
+
+    loop = asyncio.get_running_loop()
+    segments = await loop.run_in_executor(
+        None,
+        lambda: segment_image(latest_img, req.bbox, previous_img),
+    )
+
+    elevation = await fetch_elevation_grid(req.bbox)
+
+    logger.info(
+        "Segment | bbox=%s method=%s count=%d",
+        req.bbox, segments.get("method"), segments.get("segment_count", 0),
+    )
+
+    return {
+        "segments":      segments,
+        "elevation":     elevation,
+        "sam_available": segments.get("sam_available", False),
+        "method":        segments.get("method", "unknown"),
     }
 
 
