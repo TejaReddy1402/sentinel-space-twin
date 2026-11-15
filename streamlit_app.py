@@ -993,32 +993,32 @@ else:
                     extruded=True,
                     get_polygon="polygon",
                     get_elevation="height",
-                    elevation_scale=10,
+                    elevation_scale=30,
                     get_fill_color="fill_color",
-                    get_line_color=[100, 100, 120, 220],
+                    get_line_color=[40, 40, 60, 180],
                     line_width_min_pixels=1,
-                    opacity=0.85,
+                    opacity=0.82,
                 )
                 view = pdk.ViewState(
                     longitude=center_lon,
                     latitude=center_lat,
                     zoom=11,
-                    pitch=45,
-                    bearing=0,
+                    pitch=40,
+                    bearing=15,
                 )
                 tooltip = {
                     "html": (
                         "<b>{land_cover}</b><br/>"
                         "Height: {height} m<br/>"
-                        "Change: {change_score}<br/>"
+                        "Change score: {change_score}<br/>"
                         "Area: {area_pct}%"
                     ),
                     "style": {
-                        "backgroundColor": "#0d0d0d",
+                        "backgroundColor": "#1a1a2e",
                         "color": "#f0ede8",
                         "fontSize": "12px",
                         "padding": "8px",
-                        "border": "1px solid #262626",
+                        "border": "1px solid #444",
                     },
                 }
                 st.pydeck_chart(
@@ -1026,7 +1026,7 @@ else:
                         layers=[seg_layer],
                         initial_view_state=view,
                         tooltip=tooltip,
-                        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+                        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
                     ),
                     use_container_width=True,
                     height=520,
