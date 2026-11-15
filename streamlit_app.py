@@ -407,7 +407,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     _gc2.markdown("<div style='margin-top:5px'></div>", unsafe_allow_html=True)
-    if _gc2.button("Find", width="stretch"):
+    if _gc2.button("Find", use_container_width=True):
         st.session_state["_geo_error"] = False
         _geo_res = _geocode_sync(_geo_query or "")
         if _geo_res:
@@ -463,7 +463,7 @@ with st.sidebar:
     if _mlon0 < _mlon1 and _mlat0 < _mlat1:
         st.plotly_chart(
             _aoi_map_fig(_mlon0, _mlat0, _mlon1, _mlat1, height=180),
-            width="stretch", config={"displayModeBar": False},
+            use_container_width=True, config={"displayModeBar": False},
         )
 
     with st.expander("Edit Coordinates", expanded=False):
@@ -484,7 +484,7 @@ with st.sidebar:
     limit     = st.slider("Scene Limit", 5,  50, 10, step=5)
 
     st.divider()
-    run_btn = st.button("Run Analysis", type="primary", width="stretch")
+    run_btn = st.button("Run Analysis", type="primary", use_container_width=True)
     st.divider()
 
     st.markdown(_sec("Constellation Fleet"), unsafe_allow_html=True)
@@ -746,7 +746,7 @@ else:
             st.plotly_chart(
                 _aoi_map_fig(_mlon0, _mlat0, _mlon1, _mlat1,
                              height=520, scenes=scenes),
-                width="stretch",
+                use_container_width=True,
                 config={"displayModeBar": True, "scrollZoom": True},
             )
             st.markdown(
@@ -811,14 +811,14 @@ else:
                             yaxis=dict(gridcolor="#1c1c1c", tickfont=dict(size=9),
                                        showline=False),
                         )
-                        st.plotly_chart(fig, width="stretch",
+                        st.plotly_chart(fig, use_container_width=True,
                                         config={"displayModeBar": False})
 
                     thumb = pick_thumbnail(latest)
                     if thumb:
                         st.markdown(_sec("Scene Thumbnail"), unsafe_allow_html=True)
                         try:
-                            st.image(thumb, width="stretch")
+                            st.image(thumb, use_container_width=True)
                         except Exception:
                             st.caption("Thumbnail unavailable.")
 
@@ -833,7 +833,7 @@ else:
                         "Quality":  f'{s["quality_score"]:.1f}',
                         "Grade":    s.get("quality_label", "—").upper(),
                     } for s in scenes]
-                    st.dataframe(pd.DataFrame(rows), width="stretch",
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True,
                                  hide_index=True,
                                  height=min(400, max(60, 40 + len(rows) * 35)))
 
@@ -845,7 +845,7 @@ else:
                             "Formula": i["formula"],
                             "Meaning": i["meaning"],
                         } for i in r["indices"]]),
-                        width="stretch", hide_index=True,
+                        use_container_width=True, hide_index=True,
                     )
 
                     st.markdown(_sec("Visibility Classification"),
@@ -886,7 +886,7 @@ else:
                 with cc1:
                     st.markdown(_sec("Change Preview"), unsafe_allow_html=True)
                     if r.get("change_img") is not None:
-                        st.image(r["change_img"], width="stretch")
+                        st.image(r["change_img"], use_container_width=True)
                         st.markdown(
                             _note("Preview-quality · thumbnail comparison · "
                                   "production requires raw band + SCL mask processing"),
@@ -921,7 +921,7 @@ else:
                                 "Mean Δ": f'{c["properties"]["mean_difference"]:.3f}',
                                 "Hot Px": f'{c["properties"]["hot_pixel_ratio"]:.1%}',
                             } for c in cells[:20]]),
-                            width="stretch", hide_index=True,
+                            use_container_width=True, hide_index=True,
                         )
         except Exception as exc:
             st.error(f"Change Detection error: {exc}")
@@ -1128,7 +1128,7 @@ else:
                                     font=dict(size=10, color="#a09890")),
                         showlegend=True,
                     )
-                    st.plotly_chart(fig, width="stretch",
+                    st.plotly_chart(fig, use_container_width=True,
                                     config={"displayModeBar": False})
 
                     st.markdown(_sec("Next 20 Windows"), unsafe_allow_html=True)
@@ -1140,7 +1140,7 @@ else:
                             "Resolution":    w["resolution"],
                             "Type":          w["type"].upper(),
                         } for w in windows[:20]]),
-                        width="stretch", hide_index=True,
+                        use_container_width=True, hide_index=True,
                     )
         except Exception as exc:
             st.error(f"Collection Schedule error: {exc}")
