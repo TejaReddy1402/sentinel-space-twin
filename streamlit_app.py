@@ -961,20 +961,43 @@ else:
                 center_lon = (_blon0 + _blon1) / 2
                 center_lat = (_blat0 + _blat1) / 2
 
-                geojson_fc = {"type": "FeatureCollection", "features": features}
+                # Server-side colour mapping avoids deck.gl property-accessor issues
+                _LC_RGBA = {
+                    "water":       [30,  110, 220, 200],
+                    "vegetation":  [30,  175,  65, 200],
+                    "bare_ground": [200, 160,  80, 190],
+                    "urban":       [180, 180, 190, 200],
+                    "cloud_snow":  [220, 230, 255, 160],
+                    "unknown":     [140, 140, 160, 170],
+                }
+                records = []
+                for f in features:
+                    props = f["properties"]
+                    ring  = f["geometry"]["coordinates"][0]
+                    lc    = props.get("land_cover", "unknown")
+                    records.append({
+                        "polygon":      ring,
+                        "height":       props.get("height", 10.0),
+                        "fill_color":   _LC_RGBA.get(lc, [140, 140, 160, 170]),
+                        "land_cover":   lc,
+                        "change_score": round(props.get("change_score", 0.0), 3),
+                        "area_pct":     props.get("area_pct", 0.0),
+                    })
+
                 seg_layer = pdk.Layer(
-                    "GeoJsonLayer",
-                    data=geojson_fc,
+                    "PolygonLayer",
+                    data=records,
                     pickable=True,
                     stroked=True,
                     filled=True,
                     extruded=True,
+                    get_polygon="polygon",
                     get_elevation="height",
                     elevation_scale=10,
-                    get_fill_color="color",
-                    get_line_color=[60, 60, 80, 200],
+                    get_fill_color="fill_color",
+                    get_line_color=[100, 100, 120, 220],
                     line_width_min_pixels=1,
-                    opacity=0.75,
+                    opacity=0.85,
                 )
                 view = pdk.ViewState(
                     longitude=center_lon,
@@ -985,10 +1008,10 @@ else:
                 )
                 tooltip = {
                     "html": (
-                        "<b style='color:#e8a020'>{properties.land_cover}</b><br/>"
-                        "Height: {properties.height} m<br/>"
-                        "Change: {properties.change_score}<br/>"
-                        "Area: {properties.area_pct}%"
+                        "<b>{land_cover}</b><br/>"
+                        "Height: {height} m<br/>"
+                        "Change: {change_score}<br/>"
+                        "Area: {area_pct}%"
                     ),
                     "style": {
                         "backgroundColor": "#0d0d0d",
@@ -1003,7 +1026,7 @@ else:
                         layers=[seg_layer],
                         initial_view_state=view,
                         tooltip=tooltip,
-                        map_style="carto-darkmatter",
+                        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
                     ),
                     use_container_width=True,
                     height=520,
