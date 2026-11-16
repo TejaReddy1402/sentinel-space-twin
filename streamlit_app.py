@@ -407,7 +407,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     _gc2.markdown("<div style='margin-top:5px'></div>", unsafe_allow_html=True)
-    if _gc2.button("Find", use_container_width=True):
+    if _gc2.button("Find"):
         st.session_state["_geo_error"] = False
         _geo_res = _geocode_sync(_geo_query or "")
         if _geo_res:
@@ -484,7 +484,7 @@ with st.sidebar:
     limit     = st.slider("Scene Limit", 5,  50, 10, step=5)
 
     st.divider()
-    run_btn = st.button("Run Analysis", type="primary", use_container_width=True)
+    run_btn = st.button("Run Analysis", type="primary")
     st.divider()
 
     st.markdown(_sec("Constellation Fleet"), unsafe_allow_html=True)
@@ -1027,9 +1027,7 @@ else:
                         initial_view_state=view,
                         tooltip=tooltip,
                         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-                    ),
-                    width="stretch",
-                    height=520,
+                    )
                 )
 
                 st.markdown(_sec("Land Cover Breakdown"), unsafe_allow_html=True)
