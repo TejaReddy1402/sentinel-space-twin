@@ -463,7 +463,7 @@ with st.sidebar:
     if _mlon0 < _mlon1 and _mlat0 < _mlat1:
         st.plotly_chart(
             _aoi_map_fig(_mlon0, _mlat0, _mlon1, _mlat1, height=180),
-            use_container_width=True, config={"displayModeBar": False},
+            width="stretch", config={"displayModeBar": False},
         )
 
     with st.expander("Edit Coordinates", expanded=False):
@@ -746,7 +746,7 @@ else:
             st.plotly_chart(
                 _aoi_map_fig(_mlon0, _mlat0, _mlon1, _mlat1,
                              height=520, scenes=scenes),
-                use_container_width=True,
+                width="stretch",
                 config={"displayModeBar": True, "scrollZoom": True},
             )
             st.markdown(
@@ -811,14 +811,14 @@ else:
                             yaxis=dict(gridcolor="#1c1c1c", tickfont=dict(size=9),
                                        showline=False),
                         )
-                        st.plotly_chart(fig, use_container_width=True,
+                        st.plotly_chart(fig, width="stretch",
                                         config={"displayModeBar": False})
 
                     thumb = pick_thumbnail(latest)
                     if thumb:
                         st.markdown(_sec("Scene Thumbnail"), unsafe_allow_html=True)
                         try:
-                            st.image(thumb, use_container_width=True)
+                            st.image(thumb)
                         except Exception:
                             st.caption("Thumbnail unavailable.")
 
@@ -833,7 +833,7 @@ else:
                         "Quality":  f'{s["quality_score"]:.1f}',
                         "Grade":    s.get("quality_label", "—").upper(),
                     } for s in scenes]
-                    st.dataframe(pd.DataFrame(rows), use_container_width=True,
+                    st.dataframe(pd.DataFrame(rows), width="stretch",
                                  hide_index=True,
                                  height=min(400, max(60, 40 + len(rows) * 35)))
 
@@ -845,7 +845,7 @@ else:
                             "Formula": i["formula"],
                             "Meaning": i["meaning"],
                         } for i in r["indices"]]),
-                        use_container_width=True, hide_index=True,
+                        width="stretch", hide_index=True,
                     )
 
                     st.markdown(_sec("Visibility Classification"),
@@ -886,7 +886,7 @@ else:
                 with cc1:
                     st.markdown(_sec("Change Preview"), unsafe_allow_html=True)
                     if r.get("change_img") is not None:
-                        st.image(r["change_img"], use_container_width=True)
+                        st.image(r["change_img"])
                         st.markdown(
                             _note("Preview-quality · thumbnail comparison · "
                                   "production requires raw band + SCL mask processing"),
@@ -921,7 +921,7 @@ else:
                                 "Mean Δ": f'{c["properties"]["mean_difference"]:.3f}',
                                 "Hot Px": f'{c["properties"]["hot_pixel_ratio"]:.1%}',
                             } for c in cells[:20]]),
-                            use_container_width=True, hide_index=True,
+                            width="stretch", hide_index=True,
                         )
         except Exception as exc:
             st.error(f"Change Detection error: {exc}")
@@ -1126,7 +1126,7 @@ else:
                                     font=dict(size=10, color="#a09890")),
                         showlegend=True,
                     )
-                    st.plotly_chart(fig, use_container_width=True,
+                    st.plotly_chart(fig, width="stretch",
                                     config={"displayModeBar": False})
 
                     st.markdown(_sec("Next 20 Windows"), unsafe_allow_html=True)
@@ -1138,7 +1138,7 @@ else:
                             "Resolution":    w["resolution"],
                             "Type":          w["type"].upper(),
                         } for w in windows[:20]]),
-                        use_container_width=True, hide_index=True,
+                        width="stretch", hide_index=True,
                     )
         except Exception as exc:
             st.error(f"Collection Schedule error: {exc}")
