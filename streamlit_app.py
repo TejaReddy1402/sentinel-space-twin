@@ -373,7 +373,11 @@ for _k, _v in _DEFAULTS.items():
 
 
 def _apply_preset() -> None:
-    key = _PKEYS[st.session_state["_px"]]
+    idx = st.session_state["_px"]
+    if not isinstance(idx, int) or idx < 0 or idx >= len(_PKEYS):
+        st.session_state["_px"] = 0
+        return
+    key = _PKEYS[idx]
     if key:
         b = PRESETS[key]["bbox"]
         st.session_state.update(
