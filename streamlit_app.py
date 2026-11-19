@@ -1007,8 +1007,10 @@ else:
                     clat  = sum(pt[1] for pt in pts) / max(len(pts), 1)
                     # terrain base from SRTM grid (real metres), zero if unavailable
                     terrain = _interp_elevation(clon, clat, elev) if elev else 0.0
-                    # visual extrusion = terrain base + land-cover height scaled ×1.5
-                    vis_h   = round(terrain + props.get("height", 10.0) * 1.5, 1)
+                    # Encode terrain in the same unit space as elevation_scale=25:
+                    #   vis_h × 25 = (terrain/25 + class_height) × 25
+                    # → polygons over hills extrude proportionally higher than sea-level ones
+                    vis_h   = round(terrain / 25.0 + props.get("height", 10.0), 1)
                     cs      = round(props.get("change_score", 0.0), 3)
                     records.append({
                         "polygon":      ring,
@@ -1031,7 +1033,7 @@ else:
                     extruded=True,
                     get_polygon="polygon",
                     get_elevation="height_vis",
-                    elevation_scale=1,          # real metres — terrain already baked in
+                    elevation_scale=25,         # vis_h × 25 restores dramatic extrusion
                     get_fill_color="fill_color",
                     get_line_color=[40, 40, 60, 160],
                     line_width_min_pixels=1,
