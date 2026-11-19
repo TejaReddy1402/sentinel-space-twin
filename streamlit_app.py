@@ -987,14 +987,14 @@ else:
                 center_lon = (_blon0 + _blon1) / 2
                 center_lat = (_blat0 + _blat1) / 2
 
-                # Server-side colour mapping avoids deck.gl property-accessor issues
+                # Vivid land-cover palette — saturated so they pop over Voyager basemap
                 _LC_RGBA = {
-                    "water":       [30,  110, 220, 200],
-                    "vegetation":  [30,  175,  65, 200],
-                    "bare_ground": [200, 160,  80, 190],
-                    "urban":       [180, 180, 190, 200],
-                    "cloud_snow":  [220, 230, 255, 160],
-                    "unknown":     [140, 140, 160, 170],
+                    "water":       [0,   150, 255, 230],   # electric blue
+                    "vegetation":  [0,   200,  70, 230],   # vivid green
+                    "bare_ground": [215, 155,  40, 225],   # golden ochre
+                    "urban":       [230,  70,  40, 225],   # heat orange-red
+                    "cloud_snow":  [190, 210, 255, 180],   # pale sky blue
+                    "unknown":     [160,  60, 210, 200],   # vivid purple
                 }
                 records   = []
                 hex_recs  = []   # change-concentration points for HexagonLayer
@@ -1035,9 +1035,9 @@ else:
                     get_elevation="height_vis",
                     elevation_scale=25,         # vis_h × 25 restores dramatic extrusion
                     get_fill_color="fill_color",
-                    get_line_color=[40, 40, 60, 160],
+                    get_line_color=[255, 255, 255, 60],
                     line_width_min_pixels=1,
-                    opacity=0.82,
+                    opacity=0.88,
                 )
                 layers = [seg_layer]
 
@@ -1095,7 +1095,7 @@ else:
                         layers=layers,
                         initial_view_state=view,
                         tooltip=tooltip,
-                        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+                        map_style="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
                     )
                 )
                 st.markdown(
@@ -1110,12 +1110,12 @@ else:
 
                 st.markdown(_sec("Land Cover Breakdown"), unsafe_allow_html=True)
                 lc_colors = {
-                    "water":       "#1e6edc",
-                    "vegetation":  "#1eaf41",
-                    "bare_ground": "#c8a050",
-                    "urban":       "#969698",
-                    "cloud_snow":  "#dce6ff",
-                    "unknown":     "#787882",
+                    "water":       "#0096ff",
+                    "vegetation":  "#00c846",
+                    "bare_ground": "#d79b28",
+                    "urban":       "#e64628",
+                    "cloud_snow":  "#bcd2ff",
+                    "unknown":     "#a03cd2",
                 }
                 lc_counts: dict[str, int] = {}
                 lc_area: dict[str, float] = {}
