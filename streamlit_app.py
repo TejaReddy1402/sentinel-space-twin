@@ -259,6 +259,28 @@ def _safe(val, fmt: str = "", fallback: str = "—") -> str:
         return fallback
 
 
+def _interp_elevation(lon: float, lat: float, elev: dict) -> float:
+    """Bilinear interpolation of SRTM elevation grid at (lon, lat)."""
+    grid = elev.get("grid")
+    bbox = elev.get("bbox")
+    n    = elev.get("grid_size", 8)
+    if not grid or not bbox or n < 2:
+        return 0.0
+    minx, miny, maxx, maxy = bbox
+    cf = (lon - minx) / max(maxx - minx, 1e-9) * (n - 1)
+    rf = (lat - miny) / max(maxy - miny, 1e-9) * (n - 1)
+    c0 = int(max(0, min(cf, n - 2)))
+    r0 = int(max(0, min(rf, n - 2)))
+    c1, r1 = c0 + 1, r0 + 1
+    fc, fr = cf - c0, rf - r0
+    return (
+        grid[r0][c0] * (1 - fc) * (1 - fr)
+        + grid[r0][c1] * fc       * (1 - fr)
+        + grid[r1][c0] * (1 - fc) * fr
+        + grid[r1][c1] * fc       * fr
+    )
+
+
 def _geocode_sync(query: str) -> dict | None:
     if not query.strip():
         return None
@@ -974,19 +996,31 @@ else:
                     "cloud_snow":  [220, 230, 255, 160],
                     "unknown":     [140, 140, 160, 170],
                 }
-                records = []
+                records   = []
+                hex_recs  = []   # change-concentration points for HexagonLayer
                 for f in features:
                     props = f["properties"]
                     ring  = f["geometry"]["coordinates"][0]
                     lc    = props.get("land_cover", "unknown")
+                    pts   = ring[:-1]   # drop repeated closing vertex
+                    clon  = sum(pt[0] for pt in pts) / max(len(pts), 1)
+                    clat  = sum(pt[1] for pt in pts) / max(len(pts), 1)
+                    # terrain base from SRTM grid (real metres), zero if unavailable
+                    terrain = _interp_elevation(clon, clat, elev) if elev else 0.0
+                    # visual extrusion = terrain base + land-cover height scaled ×1.5
+                    vis_h   = round(terrain + props.get("height", 10.0) * 1.5, 1)
+                    cs      = round(props.get("change_score", 0.0), 3)
                     records.append({
                         "polygon":      ring,
-                        "height":       props.get("height", 10.0),
+                        "height_vis":   vis_h,
                         "fill_color":   _LC_RGBA.get(lc, [140, 140, 160, 170]),
                         "land_cover":   lc,
-                        "change_score": round(props.get("change_score", 0.0), 3),
+                        "change_score": cs,
                         "area_pct":     props.get("area_pct", 0.0),
+                        "terrain_m":    round(terrain, 1),
                     })
+                    if cs > 0.01:
+                        hex_recs.append({"position": [clon, clat], "weight": cs})
 
                 seg_layer = pdk.Layer(
                     "PolygonLayer",
@@ -996,42 +1030,80 @@ else:
                     filled=True,
                     extruded=True,
                     get_polygon="polygon",
-                    get_elevation="height",
-                    elevation_scale=30,
+                    get_elevation="height_vis",
+                    elevation_scale=1,          # real metres — terrain already baked in
                     get_fill_color="fill_color",
-                    get_line_color=[40, 40, 60, 180],
+                    get_line_color=[40, 40, 60, 160],
                     line_width_min_pixels=1,
                     opacity=0.82,
                 )
+                layers = [seg_layer]
+
+                # Change-concentration heatmap — only shown when a prior scene exists
+                if hex_recs:
+                    layers.append(pdk.Layer(
+                        "HexagonLayer",
+                        data=hex_recs,
+                        pickable=False,
+                        extruded=True,
+                        radius=300,             # metres per hex bin
+                        elevation_scale=6,
+                        get_position="position",
+                        get_elevation_weight="weight",
+                        get_color_weight="weight",
+                        elevation_aggregation="MEAN",
+                        color_aggregation="MEAN",
+                        color_range=[
+                            [65,  182, 196, 130],
+                            [127, 205, 187, 150],
+                            [199, 233, 180, 160],
+                            [255, 237, 160, 170],
+                            [254, 178,  76, 185],
+                            [240,  59,  32, 200],
+                        ],
+                        opacity=0.55,
+                    ))
+
                 view = pdk.ViewState(
                     longitude=center_lon,
                     latitude=center_lat,
                     zoom=11,
-                    pitch=40,
-                    bearing=15,
+                    pitch=50,
+                    bearing=10,
                 )
                 tooltip = {
                     "html": (
                         "<b>{land_cover}</b><br/>"
-                        "Height: {height} m<br/>"
+                        "Extrusion: {height_vis} m &nbsp;"
+                        "<span style='color:#a09890'>(terrain base: {terrain_m} m)</span><br/>"
                         "Change score: {change_score}<br/>"
                         "Area: {area_pct}%"
                     ),
                     "style": {
-                        "backgroundColor": "#1a1a2e",
+                        "backgroundColor": "#141414",
                         "color": "#f0ede8",
                         "fontSize": "12px",
-                        "padding": "8px",
-                        "border": "1px solid #444",
+                        "padding": "8px 12px",
+                        "border": "1px solid #333333",
+                        "borderRadius": "0",
                     },
                 }
                 st.pydeck_chart(
                     pdk.Deck(
-                        layers=[seg_layer],
+                        layers=layers,
                         initial_view_state=view,
                         tooltip=tooltip,
-                        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+                        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
                     )
+                )
+                st.markdown(
+                    _note(
+                        "SAM land-cover polygons extruded at real metres · "
+                        "terrain base from SRTM 30m · "
+                        + ("cyan→red hex bins = change-score concentration · " if hex_recs else "")
+                        + "hover polygons for land-cover and terrain detail"
+                    ),
+                    unsafe_allow_html=True,
                 )
 
                 st.markdown(_sec("Land Cover Breakdown"), unsafe_allow_html=True)
