@@ -563,11 +563,13 @@ function applyLocation(minLon, minLat, maxLon, maxLat, name) {
   const halfLat = Math.min(Math.max((parseFloat(maxLat)-parseFloat(minLat))/2, 0.05), 1.0);
   const bbox = [+(cx-half).toFixed(5), +(cy-halfLat).toFixed(5), +(cx+half).toFixed(5), +(cy+halfLat).toFixed(5)];
   document.getElementById('bbox').value = bbox.join(',');
-  document.getElementById('locSearch').value = name.split(',')[0];
+  const shortName = name.split(',')[0];
+  document.getElementById('locSearch').value = shortName;
   closeLocResults();
   if (aoiLayer) map.removeLayer(aoiLayer);
   aoiLayer = L.rectangle(bb(bbox), {color:'#0ea5e9',weight:2,fill:false}).addTo(map);
   map.fitBounds(bb(bbox), {padding:[30,30]});
+  _refreshLocationContent(shortName, '', bbox);
 }
 
 function closeLocResults() {
@@ -858,112 +860,204 @@ document.querySelectorAll('.ctl-fb').forEach(btn=>{
 
 loadConstellations(null, 'AOI-07, next 24 h');
 
-/* ---- Location-aware section updates ---- */
-function updateLocationSections(data) {
-  const name = data.aoi?.name || '';
-  const code = data.aoi?.code || '';
-  const bbox = data.aoi?.bbox || [];
+/* ================================================================
+   LOCATION-AWARE CONTENT ENGINE
+   Generates vessels, industries and context specific to the AOI.
+   ================================================================ */
+
+const _VESSEL_DB = {
+  northwest_europe: [
+    {name:'MSC ROTTERDAM',   mmsi:'244650001',speed:'11.2 kn',course:'090°',status:'Underway',  type:'Container'},
+    {name:'MAERSK HONAM',    mmsi:'219034567',speed:'0.0 kn', course:'270°',status:'At berth',  type:'Container'},
+    {name:'NORD EUROPE',     mmsi:'244870123',speed:'7.4 kn', course:'180°',status:'Underway',  type:'Tanker'},
+    {name:'THALASSA HELLAS', mmsi:'240912345',speed:'0.0 kn', course:'000°',status:'Anchored',  type:'Bulk'},
+    {name:'BW RHINE',        mmsi:'244650987',speed:'9.1 kn', course:'315°',status:'Underway',  type:'LNG'},
+  ],
+  southeast_asia: [
+    {name:'EVER GIVEN',      mmsi:'353136000',speed:'13.1 kn',course:'095°',status:'Underway',  type:'Container'},
+    {name:'MOL TRIUMPH',     mmsi:'477219600',speed:'0.0 kn', course:'270°',status:'At berth',  type:'Container'},
+    {name:'PACIFIC HORIZON', mmsi:'563012789',speed:'10.2 kn',course:'210°',status:'Underway',  type:'Tanker'},
+    {name:'STRAITS PIONEER', mmsi:'566123456',speed:'0.0 kn', course:'090°',status:'Anchored',  type:'Bulk'},
+    {name:'SINGA LNG ONE',   mmsi:'565789123',speed:'6.3 kn', course:'135°',status:'Underway',  type:'LNG'},
+  ],
+  south_asia: [
+    {name:'MUMBAI EXPRESS',  mmsi:'419001234',speed:'8.9 kn', course:'270°',status:'Underway',  type:'Container'},
+    {name:'GUJARAT PRIDE',   mmsi:'419012345',speed:'0.0 kn', course:'180°',status:'At berth',  type:'Tanker'},
+    {name:'INDUS CARRIER',   mmsi:'419023456',speed:'5.2 kn', course:'090°',status:'Underway',  type:'Bulk'},
+    {name:'ARABIAN STAR',    mmsi:'419034567',speed:'0.0 kn', course:'000°',status:'Moored',    type:'Container'},
+    {name:'KONKAN TRADER',   mmsi:'419045678',speed:'11.4 kn',course:'315°',status:'Underway',  type:'LNG'},
+  ],
+  middle_east: [
+    {name:'GULF PIONEER',    mmsi:'470123456',speed:'10.8 kn',course:'045°',status:'Underway',  type:'Tanker'},
+    {name:'AL GHARRAFA',     mmsi:'457000123',speed:'0.0 kn', course:'270°',status:'At berth',  type:'LNG'},
+    {name:'HORMUZ TRADER',   mmsi:'470234567',speed:'7.1 kn', course:'180°',status:'Underway',  type:'Container'},
+    {name:'PERSIAN QUEEN',   mmsi:'470345678',speed:'0.0 kn', course:'090°',status:'Anchored',  type:'Tanker'},
+    {name:'DUBAI BRIDGE',    mmsi:'470456789',speed:'12.0 kn',course:'310°',status:'Underway',  type:'Container'},
+  ],
+  east_asia: [
+    {name:'CSCL GLOBE',      mmsi:'477294800',speed:'14.2 kn',course:'090°',status:'Underway',  type:'Container'},
+    {name:'NYK REMUS',       mmsi:'431000123',speed:'0.0 kn', course:'180°',status:'At berth',  type:'Container'},
+    {name:'KOREA HYDRA',     mmsi:'440123456',speed:'9.3 kn', course:'270°',status:'Underway',  type:'Tanker'},
+    {name:'PACIFIC DRAGON',  mmsi:'477345678',speed:'0.0 kn', course:'090°',status:'Moored',    type:'Bulk'},
+    {name:'YANG MING UNITY', mmsi:'416456789',speed:'11.7 kn',course:'045°',status:'Underway',  type:'Container'},
+  ],
+  suez_canal: [
+    {name:'EVER ACE',        mmsi:'636019923',speed:'8.5 kn', course:'000°',status:'In transit',type:'Container'},
+    {name:'BRITISH COURAGE', mmsi:'235000876',speed:'8.2 kn', course:'000°',status:'In transit',type:'Tanker'},
+    {name:'THORCO LINEAGE',  mmsi:'219678901',speed:'7.8 kn', course:'180°',status:'In transit',type:'General'},
+    {name:'THALASSA MIA',    mmsi:'636098765',speed:'0.0 kn', course:'000°',status:'Waiting',   type:'Bulk'},
+    {name:'LNG SAKURA',      mmsi:'477001234',speed:'9.1 kn', course:'000°',status:'In transit',type:'LNG'},
+  ],
+  north_america: [
+    {name:'YORKTOWN EXPRESS',mmsi:'338123456',speed:'12.1 kn',course:'090°',status:'Underway',  type:'Container'},
+    {name:'ATLANTIC SAIL',   mmsi:'338234567',speed:'0.0 kn', course:'270°',status:'At berth',  type:'Container'},
+    {name:'GULF COAST LNG',  mmsi:'338345678',speed:'8.4 kn', course:'180°',status:'Underway',  type:'LNG'},
+    {name:'GREAT LAKES',     mmsi:'338456789',speed:'0.0 kn', course:'090°',status:'Moored',    type:'Bulk'},
+    {name:'PIONEER SPIRIT',  mmsi:'338567890',speed:'10.9 kn',course:'315°',status:'Underway',  type:'Tanker'},
+  ],
+  default: [
+    {name:'MSC AURORA',      mmsi:'235678901',speed:'12.4 kn',course:'084°',status:'Underway',  type:'Container'},
+    {name:'EVER FORWARD',    mmsi:'477123456',speed:'0.0 kn', course:'270°',status:'At anchor', type:'Container'},
+    {name:'NORDIC HAWK',     mmsi:'257890123',speed:'8.1 kn', course:'192°',status:'Underway',  type:'Tanker'},
+    {name:'BW ENTERPRISE',   mmsi:'563012345',speed:'14.2 kn',course:'310°',status:'Underway',  type:'LNG'},
+    {name:'CELTIC HORIZON',  mmsi:'232456789',speed:'0.0 kn', course:'000°',status:'Moored',    type:'Bulk'},
+  ],
+};
+
+const _INDUSTRY_DB = {
+  port: [
+    {aoi:'ACTIVE', category:'Maritime & Trade',       sector:'Port operations & shipping lanes',  description:'Vessel berthing, anchorage monitoring and supply-chain flow at this port.',          hot:true},
+    {aoi:'WATCH',  category:'Energy & Industrial',    sector:'Fuel & LNG bunkering',              description:'Marine fuel storage, LNG bunkering terminals and tank farm monitoring.',            hot:true},
+    {aoi:'AOI-C',  category:'Transport & Rail',       sector:'Intermodal logistics',              description:'Container yard, rail links and road haulage corridors from port gate.'},
+    {aoi:'AOI-D',  category:'Real Estate & Commercial',sector:'Warehousing & free zones',         description:'Bonded warehouses, free-trade zone estates and logistics parks.'},
+    {aoi:'AOI-E',  category:'Energy & Utilities',     sector:'Power & water infrastructure',      description:'Port power substations, desalination plants and utility corridors.'},
+    {aoi:'AOI-F',  category:'Mineral Extraction',     sector:'Bulk commodity terminals',          description:'Iron ore, coal, grain and mineral bulk handling and stockpile monitoring.'},
+    {aoi:'AOI-G',  category:'Renewables',             sector:'Offshore wind support base',        description:'Crew transfer vessel base, turbine component marshalling and O&M facilities.'},
+    {aoi:'AOI-H',  category:'Water',                  sector:'Harbour water quality',             description:'Dredging activity, sediment plume detection and water quality monitoring.'},
+    {aoi:'AOI-I',  category:'Aviation Security',      sector:'Heliport & aviation logistics',     description:'Port helipad, air cargo links and aviation fuel storage monitoring.'},
+  ],
+  airport: [
+    {aoi:'ACTIVE', category:'Aviation Security',      sector:'Airside perimeter & apron',         description:'Runway, taxiway and apron monitoring — aircraft movement and stand occupancy.',      hot:true},
+    {aoi:'WATCH',  category:'Transport & Rail',       sector:'Ground transport corridors',        description:'Rail links, motorway access and inter-terminal road network.',                       hot:true},
+    {aoi:'AOI-C',  category:'Energy & Industrial',    sector:'Aviation fuel infrastructure',      description:'Jet-A1 fuel farm, hydrant systems and tanker vehicle monitoring.'},
+    {aoi:'AOI-D',  category:'Real Estate & Commercial',sector:'Cargo & logistics zones',          description:'Air freight terminals, bonded cargo sheds and express courier hubs.'},
+    {aoi:'AOI-E',  category:'Energy & Utilities',     sector:'Power resilience',                  description:'Primary substations, emergency generators and UPS systems at airfield.'},
+    {aoi:'AOI-F',  category:'Maritime & Trade',       sector:'Air-sea cargo interchange',         description:'Cross-modal cargo linkage between airport freight and nearby seaport.'},
+    {aoi:'AOI-G',  category:'Renewables',             sector:'Solar canopy & ground arrays',      description:'Roof-mounted and car-park solar generation on terminal and cargo buildings.'},
+    {aoi:'AOI-H',  category:'Water',                  sector:'De-icing & surface water',          description:'De-icing fluid runoff containment, drainage and water quality compliance.'},
+    {aoi:'AOI-I',  category:'Mineral Extraction',     sector:'Construction materials',            description:'Runway extension, apron expansion and new terminal construction monitoring.'},
+  ],
+  energy: [
+    {aoi:'ACTIVE', category:'Energy & Industrial',    sector:'Refinery & processing complex',     description:'Distillation units, flare stacks and storage tank farm persistent monitoring.',      hot:true},
+    {aoi:'WATCH',  category:'Energy & Utilities',     sector:'Power generation & grid',           description:'Plant substations, transmission towers and high-voltage corridor monitoring.',       hot:true},
+    {aoi:'AOI-C',  category:'Maritime & Trade',       sector:'Product export terminal',           description:'Tanker loading arms, jetties and vessel scheduling at export dock.'},
+    {aoi:'AOI-D',  category:'Transport & Rail',       sector:'Pipeline right-of-way',             description:'Buried and above-ground pipeline monitoring for encroachment and leaks.'},
+    {aoi:'AOI-E',  category:'Mineral Extraction',     sector:'Feedstock supply chain',            description:'Mine-to-refinery ore and mineral feedstock logistics monitoring.'},
+    {aoi:'AOI-F',  category:'Renewables',             sector:'Hybrid energy transition',          description:'Solar and wind co-location on refinery land, electrolysis for green H2.'},
+    {aoi:'AOI-G',  category:'Real Estate & Commercial',sector:'Industrial estate',                description:'Worker accommodation, services and industrial support facilities.'},
+    {aoi:'AOI-H',  category:'Water',                  sector:'Cooling water & effluent',          description:'Cooling water intake, effluent outfall and water treatment plant monitoring.'},
+    {aoi:'AOI-I',  category:'Aviation Security',      sector:'Plant emergency response',          description:'Helipad, emergency runway and aviation fuel for plant operations.'},
+  ],
+  default: [
+    {aoi:'AOI-07', category:'Energy & Industrial',    sector:'Oil, gas and petrochemical',        description:'Terminals, pipelines and processing sites under persistent watch.'},
+    {aoi:'AOI-21', category:'Aviation Security',      sector:'Airports and aviation',             description:'Perimeter, apron and approach monitoring.'},
+    {aoi:'AOI-18', category:'Maritime & Trade',       sector:'Ports and shipping lanes',          description:'Vessel tracking, chokepoints and supply chains.'},
+    {aoi:'DD-2291',category:'Mineral Extraction',     sector:'Mining and critical minerals',      description:'Operational validation and geological insight.'},
+    {aoi:'AOI-12', category:'Energy & Utilities',     sector:'Power generation and grid',         description:'Plants, substations and transmission corridors.'},
+    {aoi:'AOI-31', category:'Real Estate & Commercial',sector:'Smart buildings and commercial',   description:'Campuses, estates and portfolio sites under persistent watch.'},
+    {aoi:'AOI-09', category:'Transport & Rail',       sector:'Rail networks and telecom',         description:'Linear infrastructure across borders.'},
+    {aoi:'AOI-03', category:'Renewables',             sector:'Solar and wind',                    description:'Remote generation sites with change detection.'},
+    {aoi:'AOI-14', category:'Water',                  sector:'Treatment and reservoirs',          description:'Critical water assets and dams.'},
+  ],
+};
+
+function _detectRegion(name, bbox) {
   const lc = name.toLowerCase();
+  const lon = bbox?.length ? (bbox[0] + bbox[2]) / 2 : 0;
+  const lat = bbox?.length ? (bbox[1] + bbox[3]) / 2 : 0;
 
-  // Detect location type from name
-  const isMaritime  = /port|harbor|harbour|bay|strait|canal|dock|terminal|anchorage|shipping/.test(lc);
-  const isAviation  = /airport|airfield|heathrow|changi|cdg|jfk|airbase/.test(lc);
-  const isEnergy    = /refinery|oil|lng|gas|petrochemical|pipeline/.test(lc);
-  const isMining    = /mine|mining|quarry|mineral/.test(lc);
-  const isRenewable = /solar|wind|farm/.test(lc);
-  const isUrban     = /city|downtown|district|urban|cbd/.test(lc);
+  if (/suez|canal/.test(lc) || (lon > 30 && lon < 35 && lat > 28 && lat < 32)) return 'suez_canal';
+  if (/singapore|malacca|batam/.test(lc) || (lon > 100 && lon < 108 && lat > -2 && lat < 5)) return 'southeast_asia';
+  if (/rotterdam|amsterdam|hamburg|antwerp|felixstowe|london gateway|north sea/.test(lc)
+      || (lon > -5 && lon < 10 && lat > 48 && lat < 58)) return 'northwest_europe';
+  if (/mumbai|nhava|kandla|chennai|kolkata|cochin/.test(lc)
+      || (lon > 68 && lon < 92 && lat > 8 && lat < 25)) return 'south_asia';
+  if (/dubai|abu dhabi|jebel ali|kuwait|bahrain|doha|muscat|hormuz/.test(lc)
+      || (lon > 48 && lon < 60 && lat > 22 && lat < 30)) return 'middle_east';
+  if (/shanghai|ningbo|shenzhen|hong kong|busan|tokyo|yokohama|kaohsiung/.test(lc)
+      || (lon > 108 && lon < 145 && lat > 20 && lat < 42)) return 'east_asia';
+  if (/new york|los angeles|houston|vancouver|montreal|long beach/.test(lc)
+      || (lon > -130 && lon < -55 && lat > 25 && lat < 55)) return 'north_america';
+  return 'default';
+}
 
-  // Update maritime section title with current location
+function _detectSector(name) {
+  const lc = name.toLowerCase();
+  if (/port|harbor|harbour|dock|terminal|anchorage|jetty|berth|quay/.test(lc)) return 'port';
+  if (/airport|airfield|heathrow|changi|cdg|jfk|lax|airbase|runway/.test(lc)) return 'airport';
+  if (/refinery|oil|lng|gas|petrochemical|pipeline|platform/.test(lc)) return 'energy';
+  return 'default';
+}
+
+function updateLocationSections(data) {
+  const name = data?.aoi?.name || data?.name || '';
+  const code = data?.aoi?.code || '';
+  const bbox = data?.aoi?.bbox || data?.bbox || [];
+  _refreshLocationContent(name, code, bbox);
+}
+
+function _refreshLocationContent(name, code, bbox) {
+  if (!name) return;
+  const region = _detectRegion(name, bbox);
+  const sector = _detectSector(name);
+  const vessels = _VESSEL_DB[region] || _VESSEL_DB.default;
+  const industries = _INDUSTRY_DB[sector] || _INDUSTRY_DB.default;
+
+  // --- Update maritime section ---
   const marTitle = document.querySelector('#maritime .sec-title');
-  if (marTitle) marTitle.textContent = `Vessel tracking near ${name}`;
+  if (marTitle) marTitle.textContent = `Vessel tracking — ${name} region`;
 
-  // Update AIS feed header
   const aisLabel = document.querySelector('.ais-label');
-  if (aisLabel) aisLabel.textContent = `AIS feed — ${name} region`;
+  if (aisLabel) aisLabel.textContent = `AIS feed — ${name}`;
 
-  // Re-render industries with relevant sector highlighted
+  const aisNote = document.querySelector('.ais-note');
+  if (aisNote) aisNote.textContent = `Illustrative vessel data for ${name} (${region.replace(/_/g,' ')}). Live AIS requires MarineTraffic or Spire API integration.`;
+
+  document.getElementById('aisVessels').innerHTML = vessels.map(v => `
+    <div class="ais-vessel">
+      <div>
+        <div class="ais-name">${v.name}</div>
+        <div class="ais-det">MMSI ${v.mmsi} · ${v.type} · ${v.speed} · ${v.course}</div>
+      </div>
+      <div class="ais-sts ${v.status==='At anchor'||v.status==='Moored'||v.status==='Anchored'||v.status==='Waiting'||v.status==='At berth'?'amb':''}">${v.status}</div>
+    </div>`).join('');
+
+  // --- Update industries section ---
   const indEl = document.getElementById('indGrid');
-  if (!indEl || !indEl.children.length) return;
+  if (!indEl) return;
 
-  // Relevance scoring per industry
-  const scores = {
-    'Maritime & Trade':       isMaritime ? 3 : 1,
-    'Aviation Security':      isAviation ? 3 : 0,
-    'Energy & Industrial':    isEnergy   ? 3 : 1,
-    'Mineral Extraction':     isMining   ? 3 : 0,
-    'Energy & Utilities':     isEnergy || isUrban ? 2 : 1,
-    'Real Estate & Commercial': isUrban  ? 2 : 1,
-    'Transport & Rail':       1,
-    'Renewables':             isRenewable ? 3 : 1,
-    'Water':                  1,
-  };
-
-  // Add a "monitoring" banner above industries
-  const indSection = document.getElementById('industries');
+  // Banner
   let banner = document.getElementById('ind-location-banner');
   if (!banner) {
     banner = document.createElement('div');
     banner.id = 'ind-location-banner';
     banner.style.cssText = 'margin-bottom:14px;padding:10px 14px;background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.2);border-radius:9px;font-size:12px;color:var(--acc)';
-    indSection.querySelector('.wrap') ? indSection.querySelector('.wrap').prepend(banner) : indSection.appendChild(banner);
-    // insert after sec-hdr
-    const hdr = indSection.querySelector('.sec-hdr');
+    const hdr = document.querySelector('#industries .sec-hdr');
     if (hdr) hdr.after(banner);
   }
-  const topSector = Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
-  banner.textContent = `Active AOI: ${name} (${code}) — primary sector: ${topSector}`;
+  banner.innerHTML = `<b>${name}</b>${code ? ' · ' + code : ''} &nbsp;·&nbsp; Sector focus: <b>${industries[0]?.category || 'General'}</b>`;
 
-  // Re-sort and re-render industry cards with highlight
-  const indCards = Array.from(indEl.querySelectorAll('.ind-c'));
-  const indData = indCards.map(c => ({
-    el: c,
-    cat: c.querySelector('.ind-cat')?.textContent || '',
-  }));
-  indData.sort((a,b) => (scores[b.cat]||0) - (scores[a.cat]||0));
-  indData.forEach(({el, cat}) => {
-    const score = scores[cat] || 0;
-    el.style.borderColor = score >= 3 ? 'rgba(14,165,233,.5)' : score >= 2 ? 'rgba(245,182,76,.3)' : '';
-    el.style.background  = score >= 3 ? 'rgba(14,165,233,.07)' : '';
-    indEl.appendChild(el);
-  });
+  indEl.innerHTML = industries.map(i => `
+    <div class="ind-c" style="${i.hot ? 'border-color:rgba(14,165,233,.5);background:rgba(14,165,233,.07)' : ''}">
+      <div class="ind-code" style="${i.hot ? 'color:var(--acc)' : ''}">${i.aoi}</div>
+      <div class="ind-cat">${i.category}</div>
+      <div class="ind-ttl">${i.sector}</div>
+      <div class="ind-desc">${i.description}</div>
+    </div>`).join('');
 }
 
-/* ---- Maritime AIS ---- */
-async function loadMaritime(){
-  try{
-    const r=await fetch(`${API}/api/maritime`);
-    const d=await r.json();
-    document.getElementById('aisVessels').innerHTML=(d.vessels||[]).map(v=>`
-      <div class="ais-vessel">
-        <div>
-          <div class="ais-name">${v.name}</div>
-          <div class="ais-det">MMSI ${v.mmsi} · ${v.type} · ${v.speed} · ${v.course}</div>
-        </div>
-        <div class="ais-sts ${v.status==='At anchor'||v.status==='Moored'?'amb':''}">${v.status}</div>
-      </div>`).join('');
-  }catch(e){
-    document.getElementById('aisVessels').innerHTML='<div style="color:var(--muted);font-size:11px">Maritime data unavailable.</div>';
-  }
-}
-loadMaritime();
-
-/* ---- Industries ---- */
-async function loadIndustries(){
-  try{
-    const r=await fetch(`${API}/api/industries`);
-    const d=await r.json();
-    document.getElementById('indGrid').innerHTML=(d.industries||[]).map(i=>`
-      <div class="ind-c">
-        <div class="ind-code">${i.aoi}</div>
-        <div class="ind-cat">${i.category}</div>
-        <div class="ind-ttl">${i.sector}</div>
-        <div class="ind-desc">${i.description}</div>
-      </div>`).join('');
-  }catch(e){
-    document.getElementById('indGrid').innerHTML='<div style="color:var(--muted);font-size:12px;padding:16px">Industries data unavailable.</div>';
-  }
-}
-loadIndustries();
+// Seed default content with Rotterdam Port on page load
+_refreshLocationContent('Rotterdam Port', '', [3.90, 51.82, 4.65, 52.08]);
 
 /* ============================================================
    3D MAP (deck.gl) + SAM SEGMENTATION
