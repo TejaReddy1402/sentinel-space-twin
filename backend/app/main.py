@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # App
 # ---------------------------------------------------------------------------
 app = FastAPI(
-    title="Sentinel Space Twin — Data Engine v2",
+    title="TERRAINGRID — Satellite Intelligence at Grid Scale",
     version="2.0.0",
     description=(
         "Evidence-first satellite intelligence platform. "
@@ -47,10 +47,12 @@ app = FastAPI(
     ),
 )
 
-# CORS: permissive for local development. Restrict origins in production.
+# CORS: allow Vercel preview/production domains and local dev.
+# Set CORS_ORIGINS env var in production (comma-separated). Defaults to wildcard.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=r"https://terraingrid.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

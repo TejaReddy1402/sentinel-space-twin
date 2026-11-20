@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_vlm_model: str = "qwen2.5vl:7b"
 
+    # CORS — set to comma-separated list of allowed origins; defaults to wildcard (dev)
+    cors_origins: list[str] = ["*"]
+
     @field_validator("public_base_url", "stac_api_url", mode="before")
     @classmethod
     def _strip_trailing_slash(cls, v: str) -> str:

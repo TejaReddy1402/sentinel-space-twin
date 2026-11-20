@@ -13,12 +13,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
-  frontend:
-    image: nginx:1.27-alpine
-    ports:
-      - "8080:80"
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-    depends_on:
-      - backend
-    restart: unless-stopped

@@ -12,9 +12,12 @@ COPY static ./static
 
 RUN adduser --disabled-password --gecos '' appuser
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8787/api/health || exit 1
+# PORT is injected by Railway; default to 8787 for local/docker-compose
+ENV PORT=8787
 
-EXPOSE 8787
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/api/health || exit 1
+
+EXPOSE ${PORT}
 USER appuser
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8787"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
