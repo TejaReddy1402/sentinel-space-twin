@@ -176,17 +176,21 @@ async def segment(req: SegmentRequest) -> dict[str, Any]:
 
     latest_img = await fetch_image(req.latest_url)
     if latest_img is None:
-        raise HTTPException(status_code=422, detail="Could not download latest_url image.")
+        raise HTTPException(status_code=422, detail=f"Could not download image: {req.latest_url}")
 
     previous_img = None
     if req.previous_url:
         previous_img = await fetch_image(req.previous_url)
 
     loop = asyncio.get_running_loop()
-    segments = await loop.run_in_executor(
-        None,
-        lambda: segment_image(latest_img, req.bbox, previous_img),
-    )
+    try:
+        segments = await loop.run_in_executor(
+            None,
+            lambda: segment_image(latest_img, req.bbox, previous_img),
+        )
+    except Exception as exc:
+        logger.exception("segment_image failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Segmentation failed: {exc}") from exc
 
     elevation = await fetch_elevation_grid(req.bbox)
 

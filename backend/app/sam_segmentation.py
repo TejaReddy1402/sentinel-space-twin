@@ -171,8 +171,16 @@ def _load_sam() -> bool:
 
 def _slic_masks(arr: np.ndarray, n: int) -> list[np.ndarray]:
     from skimage.segmentation import slic
-    labels = slic(arr, n_segments=n, compactness=10, sigma=1,
-                  channel_axis=2, convert2lab=True, start_label=0)
+    import inspect
+    sig = inspect.signature(slic)
+    kwargs: dict = dict(n_segments=n, compactness=10, sigma=1, convert2lab=True)
+    if "channel_axis" in sig.parameters:
+        kwargs["channel_axis"] = 2
+    else:
+        kwargs["multichannel"] = True
+    if "start_label" in sig.parameters:
+        kwargs["start_label"] = 0
+    labels = slic(arr, **kwargs)
     return [labels == lbl for lbl in np.unique(labels) if (labels == lbl).sum() > 60]
 
 
