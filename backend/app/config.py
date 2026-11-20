@@ -35,23 +35,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_vlm_model: str = "qwen2.5vl:7b"
 
-    # CORS — comma-separated string or JSON array; defaults to wildcard (dev)
+    # CORS — plain comma-separated string; pydantic-settings reads it as str (no JSON parsing)
     # e.g. CORS_ORIGINS=https://terraingrid.vercel.app,https://www.terraingrid.io
-    cors_origins: list[str] = ["*"]
-
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def _parse_cors(cls, v: object) -> list[str]:
-        if isinstance(v, list):
-            return v
-        s = str(v).strip()
-        if not s:
-            return ["*"]
-        # Accept JSON array or plain comma-separated string
-        if s.startswith("["):
-            import json
-            return json.loads(s)
-        return [o.strip() for o in s.split(",") if o.strip()]
+    cors_origins: str = "*"
 
     @field_validator("public_base_url", "stac_api_url", mode="before")
     @classmethod

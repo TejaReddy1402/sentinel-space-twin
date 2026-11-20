@@ -48,10 +48,11 @@ app = FastAPI(
 )
 
 # CORS: allow Vercel preview/production domains and local dev.
-# Set CORS_ORIGINS env var in production (comma-separated). Defaults to wildcard.
+# CORS_ORIGINS env var is a plain comma-separated string (e.g. "https://foo.vercel.app,*")
+_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()] or ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=_cors_origins,
     allow_origin_regex=r"https://terraingrid.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
