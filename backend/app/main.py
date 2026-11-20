@@ -1,5 +1,5 @@
 """
-Sentinel Space Twin — Data Engine v2
+TERRAINGRID — Satellite Intelligence at Grid Scale
 FastAPI application entry point.
 """
 from __future__ import annotations
@@ -99,7 +99,7 @@ async def _startup() -> None:
 @app.get("/api/health", tags=["system"])
 def health() -> dict[str, str]:
     """Service liveness probe."""
-    return {"status": "ok", "service": "sentinel-space-twin-v2"}
+    return {"status": "ok", "service": "terraingrid-v2"}
 
 
 @app.get("/api/presets", tags=["reference"])
