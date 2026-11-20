@@ -341,9 +341,13 @@ button{font-family:inherit;cursor:pointer}
 
           <!-- VLM packet -->
           <div id="tab-vlm" class="dtc">
-            <div class="dst">VLM / LLM input packet</div>
-            <div style="color:var(--muted);font-size:11px;margin-bottom:8px;line-height:1.5">Input packet for Qwen2.5-VL / InternVL / LLaVA. The VLM explains evidence; it does not invent resolution.</div>
-            <div id="vlmPacket" class="code-blk">Run analysis first.</div>
+            <div class="dst">AI Analysis Prompt</div>
+            <div id="vlmSummary" style="color:var(--muted);font-size:11px;margin-bottom:10px;line-height:1.6">Run analysis to generate an AI-ready prompt for this scene.</div>
+            <div id="vlmActions" style="display:none;margin-bottom:10px;display:none;gap:8px;flex-wrap:wrap">
+              <button onclick="copyVlmPrompt()" style="background:var(--acc);border:none;color:#000;font-weight:700;font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer">Copy AI Prompt</button>
+              <button onclick="toggleVlmJson()" style="background:var(--sur2);border:1px solid var(--bdr);color:var(--txt2);font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer">Show Raw JSON</button>
+            </div>
+            <div id="vlmJson" style="display:none"><div id="vlmPacket" class="code-blk" style="font-size:10px;max-height:300px;overflow-y:auto"></div></div>
           </div>
 
           <!-- 3D SAM segments -->
@@ -546,7 +550,7 @@ function renderSummary(data){
   renderEvidence(data);
   renderRecord(data);
   renderVisibility(data);
-  document.getElementById('vlmPacket').textContent=JSON.stringify(data.vlm_packet,null,2);
+  renderVlm(data.vlm_packet, data);
   setTimeout(() => fetchSegments(data).catch(() => {}), 0);
 }
 
@@ -653,6 +657,69 @@ function renderVisibility(data){
       row.appendChild(link);
       assetList.appendChild(row);
     });
+  }
+}
+
+/* ---- VLM panel ---- */
+let _vlmPacketData = null;
+function renderVlm(packet, data) {
+  _vlmPacketData = packet;
+  const sumEl = document.getElementById('vlmSummary');
+  const actEl = document.getElementById('vlmActions');
+  const jsonEl = document.getElementById('vlmPacket');
+  if (!packet) { sumEl.textContent = 'No VLM packet available.'; return; }
+
+  const inp = packet.inputs || {};
+  const lat = data.selected?.latest;
+  const chg = data.change || {};
+  const cells = chg.geojson?.features?.length || 0;
+
+  sumEl.innerHTML = `
+    <div style="display:grid;gap:7px">
+      <div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:9px;padding:10px 12px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px">Scene pair</div>
+        <div style="font-size:12px;color:var(--txt)">${data.aoi?.name || '—'} · ${data.aoi?.code || '—'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtDate(inp.latest_datetime)} vs ${fmtDate(inp.previous_datetime)}</div>
+      </div>
+      <div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:9px;padding:10px 12px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px">Quality</div>
+        <div style="font-size:12px;color:var(--grn)">Score ${inp.latest_quality_score ?? '—'} · Cloud ${Number(inp.latest_cloud_cover ?? 0).toFixed(1)}%</div>
+      </div>
+      <div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:9px;padding:10px 12px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px">Change signal</div>
+        <div style="font-size:12px;color:var(--amb)">${cells} change cells · ${chg.status || '—'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${chg.summary || ''}</div>
+      </div>
+      <div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:9px;padding:10px 12px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px">AI prompt</div>
+        <div style="font-size:11px;color:var(--txt2);line-height:1.6;font-style:italic">"${packet.prompt}"</div>
+      </div>
+    </div>`;
+
+  actEl.style.display = 'flex';
+  if (jsonEl) jsonEl.textContent = JSON.stringify(packet, null, 2);
+}
+
+function copyVlmPrompt() {
+  if (!_vlmPacketData) return;
+  const text = `${_vlmPacketData.prompt}\n\nLatest thumbnail: ${_vlmPacketData.inputs?.latest_thumbnail || ''}\nPrevious thumbnail: ${_vlmPacketData.inputs?.previous_thumbnail || ''}\n\nRules:\n${(_vlmPacketData.rules || []).map((r,i) => `${i+1}. ${r}`).join('\n')}`;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1800);
+  });
+}
+
+function toggleVlmJson() {
+  const el = document.getElementById('vlmJson');
+  const btn = event.target;
+  if (el.style.display === 'none' || !el.style.display) {
+    el.style.display = 'block';
+    btn.textContent = 'Hide Raw JSON';
+  } else {
+    el.style.display = 'none';
+    btn.textContent = 'Show Raw JSON';
   }
 }
 

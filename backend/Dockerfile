@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# CACHEBUST forces a fresh copy of app code on every deploy
+ARG CACHEBUST=1
 COPY app ./app
 COPY static ./static
 
