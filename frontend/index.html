@@ -255,7 +255,15 @@ button{font-family:inherit;cursor:pointer}
         <div class="dp-inn">
           <div class="dp-t">1. Choose AOI</div>
 
-          <div class="dp-row"><label class="dp-lbl" for="preset">Preset</label><select id="preset" class="dp-sel"></select></div>
+          <div class="dp-row" style="position:relative">
+            <label class="dp-lbl" for="locSearch">Search any location</label>
+            <div style="display:flex;gap:6px">
+              <input id="locSearch" class="dp-inp" placeholder="e.g. Suez Canal, Tokyo Bay…" autocomplete="off" style="flex:1"/>
+              <button id="locBtn" onclick="searchLocation()" style="background:var(--sur2);border:1px solid var(--bdr);color:var(--txt2);border-radius:8px;padding:0 10px;font-size:13px;cursor:pointer;white-space:nowrap" title="Search">⌕</button>
+            </div>
+            <div id="locResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:900;background:var(--sur);border:1px solid var(--bdr2);border-radius:9px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:220px;overflow-y:auto"></div>
+          </div>
+          <div class="dp-row"><label class="dp-lbl" for="preset">— or pick a preset —</label><select id="preset" class="dp-sel"></select></div>
           <div class="dp-row"><label class="dp-lbl" for="bbox">BBox [minLon,minLat,maxLon,maxLat]</label><input id="bbox" class="dp-inp"/></div>
           <div class="dp-g2 dp-row">
             <div><label class="dp-lbl" for="days">Days back</label><input id="days" class="dp-inp" type="number" value="90"/></div>
@@ -511,6 +519,60 @@ const presets={
   aoiLayer=L.rectangle(bb(b),{color:'#0ea5e9',weight:2,fill:false}).addTo(map);
   map.fitBounds(bb(b));
 })();
+
+/* ---- Location search (Nominatim) ---- */
+let _locTimer = null;
+document.getElementById('locSearch').addEventListener('input', () => {
+  clearTimeout(_locTimer);
+  _locTimer = setTimeout(() => searchLocation(true), 420);
+});
+document.getElementById('locSearch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); searchLocation(); }
+  if (e.key === 'Escape') closeLocResults();
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#locResults') && e.target.id !== 'locSearch') closeLocResults();
+});
+
+async function searchLocation(preview = false) {
+  const q = document.getElementById('locSearch').value.trim();
+  if (q.length < 2) return;
+  const res = document.getElementById('locResults');
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=0`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const hits = await r.json();
+    if (!hits.length) { res.style.display = 'block'; res.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--muted)">No results found.</div>'; return; }
+    res.style.display = 'block';
+    res.innerHTML = hits.map((h, i) => `
+      <div data-idx="${i}" class="loc-row" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--bdr);font-size:12px;color:var(--txt2)"
+           onmouseenter="this.style.background='var(--sur2)'" onmouseleave="this.style.background=''"
+           onclick="applyLocation(${h.boundingbox[2]},${h.boundingbox[0]},${h.boundingbox[3]},${h.boundingbox[1]},'${h.display_name.replace(/'/g,"\\'")}')">
+        <div style="font-weight:600;color:var(--txt)">${h.name || h.display_name.split(',')[0]}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${h.display_name}</div>
+      </div>`).join('');
+  } catch(e) { res.style.display = 'block'; res.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--red)">Search failed — check connection.</div>'; }
+}
+
+function applyLocation(minLon, minLat, maxLon, maxLat, name) {
+  // Clamp to reasonable analysis size (max ~2°)
+  const cx = (parseFloat(minLon)+parseFloat(maxLon))/2, cy = (parseFloat(minLat)+parseFloat(maxLat))/2;
+  const half = Math.min(Math.max((parseFloat(maxLon)-parseFloat(minLon))/2, 0.05), 1.0);
+  const halfLat = Math.min(Math.max((parseFloat(maxLat)-parseFloat(minLat))/2, 0.05), 1.0);
+  const bbox = [+(cx-half).toFixed(5), +(cy-halfLat).toFixed(5), +(cx+half).toFixed(5), +(cy+halfLat).toFixed(5)];
+  document.getElementById('bbox').value = bbox.join(',');
+  document.getElementById('locSearch').value = name.split(',')[0];
+  closeLocResults();
+  if (aoiLayer) map.removeLayer(aoiLayer);
+  aoiLayer = L.rectangle(bb(bbox), {color:'#0ea5e9',weight:2,fill:false}).addTo(map);
+  map.fitBounds(bb(bbox), {padding:[30,30]});
+}
+
+function closeLocResults() {
+  document.getElementById('locResults').style.display = 'none';
+}
 
 /* ---- Analysis ---- */
 async function run(){
