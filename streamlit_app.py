@@ -36,7 +36,7 @@ logging.basicConfig(level=logging.WARNING)
 
 # ── Page ──────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Sentinel Space Twin | Intelligence Platform",
+    page_title="ORBIXA · Earth Intelligence Platform",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -413,11 +413,13 @@ def _apply_preset() -> None:
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown(
-        '<div style="font-size:11px;font-weight:700;color:#f0ede8;'
-        'letter-spacing:0.14em;text-transform:uppercase;margin-bottom:2px">'
-        'Sentinel Space Twin</div>'
-        '<div style="font-size:9px;color:#4a4440;letter-spacing:0.12em;'
-        'text-transform:uppercase;margin-bottom:16px">Intelligence Platform</div>',
+        '<div style="font-size:17px;font-weight:900;color:#f0ede8;'
+        'letter-spacing:0.3em;text-transform:uppercase;margin-bottom:2px;'
+        'line-height:1">'
+        'ORBI<span style="color:#e8a020">XA</span></div>'
+        '<div style="font-size:9px;color:#4a4440;letter-spacing:0.14em;'
+        'text-transform:uppercase;margin-bottom:16px">'
+        'Earth Intelligence Platform</div>',
         unsafe_allow_html=True,
     )
     st.divider()
@@ -528,12 +530,13 @@ with st.sidebar:
 hc1, hc2 = st.columns([5, 1])
 with hc1:
     st.markdown(
-        '<h2 style="margin:0;font-size:18px;font-weight:700;color:#f0ede8;'
-        'letter-spacing:0.08em;text-transform:uppercase">Sentinel Space Twin</h2>'
+        '<h2 style="margin:0;font-size:24px;font-weight:900;color:#f0ede8;'
+        'letter-spacing:0.3em;text-transform:uppercase;line-height:1">'
+        'ORBI<span style="color:#e8a020">XA</span></h2>'
         '<div style="font-size:10px;color:#4a4440;letter-spacing:0.14em;'
-        'text-transform:uppercase;margin-top:3px">'
-        'Satellite Intelligence &nbsp;·&nbsp; Sentinel-2 L2A &nbsp;·&nbsp; '
-        'Element84 STAC &nbsp;·&nbsp; Chain-of-Custody Evidence'
+        'text-transform:uppercase;margin-top:5px">'
+        'Earth Intelligence &nbsp;·&nbsp; Sentinel-2 L2A &nbsp;·&nbsp; '
+        'MobileSAM · SRTM 3D &nbsp;·&nbsp; Orbital Precision'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -695,15 +698,88 @@ if st.session_state["run_error"]:
         st.error(f"Analysis failed: {_err}")
 
 elif st.session_state["result"] is None:
-    st.markdown(
-        '<div style="text-align:center;padding:120px 0">'
-        '<div style="font-size:10px;letter-spacing:0.22em;text-transform:uppercase;'
-        'color:#333333">Select an AOI and run analysis</div>'
-        '<div style="font-size:9px;color:#1c1c1c;letter-spacing:0.1em;margin-top:10px">'
-        'Sentinel-2 L2A · Element84 STAC · Near real-time EO data</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+<style>
+.ox-hero{text-align:center;padding:64px 0 56px;}
+.ox-wordmark{font-size:56px;font-weight:900;color:#f0ede8;letter-spacing:0.34em;
+  text-transform:uppercase;line-height:1;margin-bottom:0;}
+.ox-wordmark em{color:#e8a020;font-style:normal;}
+.ox-rule{width:36px;height:2px;background:#e8a020;margin:18px auto 20px;}
+.ox-tagline{font-size:11px;color:#a09890;letter-spacing:0.22em;
+  text-transform:uppercase;margin-bottom:14px;}
+.ox-desc{font-size:12px;color:#4a4440;letter-spacing:0.05em;line-height:2;
+  max-width:560px;margin:0 auto 56px;}
+.ox-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+  background:#1c1c1c;border:1px solid #1c1c1c;max-width:960px;margin:0 auto 48px;}
+.ox-card{background:#0d0d0d;padding:28px 26px;text-align:left;}
+.ox-card-num{font-size:9px;color:#1c1c1c;letter-spacing:0.22em;
+  font-variant-numeric:tabular-nums;margin-bottom:14px;}
+.ox-card-title{font-size:10px;font-weight:700;color:#e8a020;
+  letter-spacing:0.16em;text-transform:uppercase;margin-bottom:9px;}
+.ox-card-body{font-size:11px;color:#4a4440;line-height:1.75;letter-spacing:0.03em;}
+.ox-stack{display:flex;justify-content:center;flex-wrap:wrap;
+  border:1px solid #1c1c1c;max-width:720px;margin:0 auto 36px;}
+.ox-pill{font-size:9px;color:#333333;letter-spacing:0.14em;
+  text-transform:uppercase;padding:8px 20px;border-right:1px solid #1c1c1c;}
+.ox-pill:last-child{border-right:none;}
+.ox-cta{font-size:9px;color:#262626;letter-spacing:0.18em;
+  text-transform:uppercase;margin-top:8px;}
+</style>
+
+<div class="ox-hero">
+  <div class="ox-wordmark">ORBI<em>XA</em></div>
+  <div class="ox-rule"></div>
+  <div class="ox-tagline">Earth Intelligence at Orbital Precision</div>
+  <div class="ox-desc">
+    Real-time satellite analytics for commodity markets, port logistics,<br>
+    infrastructure monitoring &amp; trade intelligence.
+  </div>
+
+  <div class="ox-grid">
+    <div class="ox-card">
+      <div class="ox-card-num">01</div>
+      <div class="ox-card-title">Scene Intelligence</div>
+      <div class="ox-card-body">Sentinel-2 L2A discovery via Element84 STAC. Quality scoring, cloud masking and spectral index production for any AOI worldwide.</div>
+    </div>
+    <div class="ox-card">
+      <div class="ox-card-num">02</div>
+      <div class="ox-card-title">AI Segmentation</div>
+      <div class="ox-card-body">MobileSAM automatic segment-anything model classifies land cover — water, vegetation, urban, bare ground — at scene level.</div>
+    </div>
+    <div class="ox-card">
+      <div class="ox-card-num">03</div>
+      <div class="ox-card-title">3D Terrain Maps</div>
+      <div class="ox-card-body">SRTM 30m elevation fused into deck.gl extruded polygons. Every segment extruded at real-metre heights above sea level.</div>
+    </div>
+    <div class="ox-card">
+      <div class="ox-card-num">04</div>
+      <div class="ox-card-title">Change Detection</div>
+      <div class="ox-card-body">Multi-temporal pixel differencing with cell-level change scoring, GeoJSON export and concentration heatmaps for analyst workflows.</div>
+    </div>
+    <div class="ox-card">
+      <div class="ox-card-num">05</div>
+      <div class="ox-card-title">Collection Schedule</div>
+      <div class="ox-card-body">24-hour collection windows across BlackSky Gen3, Pleiades Neo and ICEYE SAR constellations with live revisit planning.</div>
+    </div>
+    <div class="ox-card">
+      <div class="ox-card-num">06</div>
+      <div class="ox-card-title">Chain of Custody</div>
+      <div class="ox-card-body">SHA-256 integrity records for every scene capture event. Audit-ready evidence for commodity compliance and legal review.</div>
+    </div>
+  </div>
+
+  <div class="ox-stack">
+    <span class="ox-pill">Sentinel-2 L2A</span>
+    <span class="ox-pill">Element84 STAC</span>
+    <span class="ox-pill">MobileSAM</span>
+    <span class="ox-pill">SRTM 30m</span>
+    <span class="ox-pill">deck.gl 3D</span>
+    <span class="ox-pill">Near Real-Time</span>
+  </div>
+
+  <div class="ox-cta">← Select an AOI in the sidebar and click Run Analysis to begin</div>
+</div>
+""", unsafe_allow_html=True)
 
 else:
     r      = st.session_state["result"]
