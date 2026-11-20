@@ -36,7 +36,7 @@ logging.basicConfig(level=logging.WARNING)
 
 # ── Page ──────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="ORBIXA · Earth Intelligence Platform",
+    page_title="TERRAINGRID · Satellite Intelligence at Grid Scale",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -413,13 +413,13 @@ def _apply_preset() -> None:
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown(
-        '<div style="font-size:17px;font-weight:900;color:#f0ede8;'
-        'letter-spacing:0.3em;text-transform:uppercase;margin-bottom:2px;'
+        '<div style="font-size:14px;font-weight:900;color:#f0ede8;'
+        'letter-spacing:0.22em;text-transform:uppercase;margin-bottom:2px;'
         'line-height:1">'
-        'ORBI<span style="color:#e8a020">XA</span></div>'
+        'TERRAIN<span style="color:#e8a020">GRID</span></div>'
         '<div style="font-size:9px;color:#4a4440;letter-spacing:0.14em;'
         'text-transform:uppercase;margin-bottom:16px">'
-        'Earth Intelligence Platform</div>',
+        'Satellite Intelligence at Grid Scale</div>',
         unsafe_allow_html=True,
     )
     st.divider()
@@ -530,13 +530,13 @@ with st.sidebar:
 hc1, hc2 = st.columns([5, 1])
 with hc1:
     st.markdown(
-        '<h2 style="margin:0;font-size:24px;font-weight:900;color:#f0ede8;'
-        'letter-spacing:0.3em;text-transform:uppercase;line-height:1">'
-        'ORBI<span style="color:#e8a020">XA</span></h2>'
+        '<h2 style="margin:0;font-size:22px;font-weight:900;color:#f0ede8;'
+        'letter-spacing:0.22em;text-transform:uppercase;line-height:1">'
+        'TERRAIN<span style="color:#e8a020">GRID</span></h2>'
         '<div style="font-size:10px;color:#4a4440;letter-spacing:0.14em;'
         'text-transform:uppercase;margin-top:5px">'
-        'Earth Intelligence &nbsp;·&nbsp; Sentinel-2 L2A &nbsp;·&nbsp; '
-        'MobileSAM · SRTM 3D &nbsp;·&nbsp; Orbital Precision'
+        'Satellite Intelligence at Grid Scale &nbsp;·&nbsp; Sentinel-2 L2A &nbsp;·&nbsp; '
+        'MobileSAM &nbsp;·&nbsp; SRTM 3D'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -700,84 +700,100 @@ if st.session_state["run_error"]:
 elif st.session_state["result"] is None:
     st.markdown("""
 <style>
-.ox-hero{text-align:center;padding:64px 0 56px;}
-.ox-wordmark{font-size:56px;font-weight:900;color:#f0ede8;letter-spacing:0.34em;
+.tg-hero{text-align:center;padding:64px 0 56px;}
+.tg-wordmark{font-size:52px;font-weight:900;letter-spacing:0.26em;
   text-transform:uppercase;line-height:1;margin-bottom:0;}
-.ox-wordmark em{color:#e8a020;font-style:normal;}
-.ox-rule{width:36px;height:2px;background:#e8a020;margin:18px auto 20px;}
-.ox-tagline{font-size:11px;color:#a09890;letter-spacing:0.22em;
+.tg-wordmark .tg-w{color:#f0ede8;}
+.tg-wordmark .tg-a{color:#e8a020;}
+.tg-rule{width:40px;height:2px;background:#e8a020;margin:18px auto 20px;}
+.tg-tagline{font-size:11px;color:#a09890;letter-spacing:0.22em;
   text-transform:uppercase;margin-bottom:14px;}
-.ox-desc{font-size:12px;color:#4a4440;letter-spacing:0.05em;line-height:2;
-  max-width:560px;margin:0 auto 56px;}
-.ox-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+.tg-desc{font-size:12px;color:#4a4440;letter-spacing:0.05em;line-height:2;
+  max-width:580px;margin:0 auto 52px;}
+.tg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
   background:#1c1c1c;border:1px solid #1c1c1c;max-width:960px;margin:0 auto 48px;}
-.ox-card{background:#0d0d0d;padding:28px 26px;text-align:left;}
-.ox-card-num{font-size:9px;color:#1c1c1c;letter-spacing:0.22em;
+.tg-card{background:#0d0d0d;padding:28px 26px;text-align:left;
+  border-bottom:2px solid transparent;transition:border-color 0.2s;}
+.tg-card:hover{border-bottom:2px solid #e8a020;}
+.tg-card-num{font-size:9px;color:#1c1c1c;letter-spacing:0.22em;
   font-variant-numeric:tabular-nums;margin-bottom:14px;}
-.ox-card-title{font-size:10px;font-weight:700;color:#e8a020;
+.tg-card-title{font-size:10px;font-weight:700;color:#e8a020;
   letter-spacing:0.16em;text-transform:uppercase;margin-bottom:9px;}
-.ox-card-body{font-size:11px;color:#4a4440;line-height:1.75;letter-spacing:0.03em;}
-.ox-stack{display:flex;justify-content:center;flex-wrap:wrap;
-  border:1px solid #1c1c1c;max-width:720px;margin:0 auto 36px;}
-.ox-pill{font-size:9px;color:#333333;letter-spacing:0.14em;
+.tg-card-tech{font-size:9px;color:#333333;letter-spacing:0.12em;
+  text-transform:uppercase;margin-bottom:8px;}
+.tg-card-body{font-size:11px;color:#4a4440;line-height:1.75;letter-spacing:0.03em;}
+.tg-divider{width:100%;height:1px;background:#1c1c1c;max-width:960px;
+  margin:0 auto 36px;}
+.tg-stack{display:flex;justify-content:center;flex-wrap:wrap;
+  border:1px solid #1c1c1c;max-width:760px;margin:0 auto 36px;}
+.tg-pill{font-size:9px;color:#333333;letter-spacing:0.14em;
   text-transform:uppercase;padding:8px 20px;border-right:1px solid #1c1c1c;}
-.ox-pill:last-child{border-right:none;}
-.ox-cta{font-size:9px;color:#262626;letter-spacing:0.18em;
+.tg-pill:last-child{border-right:none;}
+.tg-cta{font-size:9px;color:#262626;letter-spacing:0.18em;
   text-transform:uppercase;margin-top:8px;}
 </style>
 
-<div class="ox-hero">
-  <div class="ox-wordmark">ORBI<em>XA</em></div>
-  <div class="ox-rule"></div>
-  <div class="ox-tagline">Earth Intelligence at Orbital Precision</div>
-  <div class="ox-desc">
-    Real-time satellite analytics for commodity markets, port logistics,<br>
-    infrastructure monitoring &amp; trade intelligence.
+<div class="tg-hero">
+  <div class="tg-wordmark">
+    <span class="tg-w">TERRAIN</span><span class="tg-a">GRID</span>
+  </div>
+  <div class="tg-rule"></div>
+  <div class="tg-tagline">Satellite Intelligence at Grid Scale</div>
+  <div class="tg-desc">
+    AI-mapped terrain intelligence for commodity markets, port logistics,<br>
+    infrastructure monitoring &amp; global trade surveillance.
   </div>
 
-  <div class="ox-grid">
-    <div class="ox-card">
-      <div class="ox-card-num">01</div>
-      <div class="ox-card-title">Scene Intelligence</div>
-      <div class="ox-card-body">Sentinel-2 L2A discovery via Element84 STAC. Quality scoring, cloud masking and spectral index production for any AOI worldwide.</div>
+  <div class="tg-grid">
+    <div class="tg-card">
+      <div class="tg-card-num">01</div>
+      <div class="tg-card-title">Scene Intelligence</div>
+      <div class="tg-card-tech">Sentinel-2 L2A · Element84 STAC</div>
+      <div class="tg-card-body">Scene discovery, quality scoring, cloud masking and spectral index production — NDVI, NDWI, NBR — for any AOI worldwide.</div>
     </div>
-    <div class="ox-card">
-      <div class="ox-card-num">02</div>
-      <div class="ox-card-title">AI Segmentation</div>
-      <div class="ox-card-body">MobileSAM automatic segment-anything model classifies land cover — water, vegetation, urban, bare ground — at scene level.</div>
+    <div class="tg-card">
+      <div class="tg-card-num">02</div>
+      <div class="tg-card-title">AI Segmentation</div>
+      <div class="tg-card-tech">MobileSAM · SLIC fallback</div>
+      <div class="tg-card-body">Segment Anything Model classifies land cover — water, vegetation, urban, bare ground — automatically at scene level.</div>
     </div>
-    <div class="ox-card">
-      <div class="ox-card-num">03</div>
-      <div class="ox-card-title">3D Terrain Maps</div>
-      <div class="ox-card-body">SRTM 30m elevation fused into deck.gl extruded polygons. Every segment extruded at real-metre heights above sea level.</div>
+    <div class="tg-card">
+      <div class="tg-card-num">03</div>
+      <div class="tg-card-title">3D Terrain Grid</div>
+      <div class="tg-card-tech">SRTM 30m · deck.gl PolygonLayer</div>
+      <div class="tg-card-body">SRTM elevation bilinearly interpolated per segment. Every polygon extruded at real-metre heights above sea level.</div>
     </div>
-    <div class="ox-card">
-      <div class="ox-card-num">04</div>
-      <div class="ox-card-title">Change Detection</div>
-      <div class="ox-card-body">Multi-temporal pixel differencing with cell-level change scoring, GeoJSON export and concentration heatmaps for analyst workflows.</div>
+    <div class="tg-card">
+      <div class="tg-card-num">04</div>
+      <div class="tg-card-title">Change Detection</div>
+      <div class="tg-card-tech">Multi-temporal diff · HexagonLayer</div>
+      <div class="tg-card-body">Cell-level pixel differencing with change-score concentration heatmaps and GeoJSON export for analyst workflows.</div>
     </div>
-    <div class="ox-card">
-      <div class="ox-card-num">05</div>
-      <div class="ox-card-title">Collection Schedule</div>
-      <div class="ox-card-body">24-hour collection windows across BlackSky Gen3, Pleiades Neo and ICEYE SAR constellations with live revisit planning.</div>
+    <div class="tg-card">
+      <div class="tg-card-num">05</div>
+      <div class="tg-card-title">Collection Schedule</div>
+      <div class="tg-card-tech">BlackSky · Pleiades · ICEYE SAR</div>
+      <div class="tg-card-body">24-hour collection windows across three constellations. Next revisit time and resolution planning per AOI.</div>
     </div>
-    <div class="ox-card">
-      <div class="ox-card-num">06</div>
-      <div class="ox-card-title">Chain of Custody</div>
-      <div class="ox-card-body">SHA-256 integrity records for every scene capture event. Audit-ready evidence for commodity compliance and legal review.</div>
+    <div class="tg-card">
+      <div class="tg-card-num">06</div>
+      <div class="tg-card-title">Chain of Custody</div>
+      <div class="tg-card-tech">SHA-256 · Audit record</div>
+      <div class="tg-card-body">Integrity-hashed evidence records for every scene capture. Audit-ready for commodity compliance and legal review.</div>
     </div>
   </div>
 
-  <div class="ox-stack">
-    <span class="ox-pill">Sentinel-2 L2A</span>
-    <span class="ox-pill">Element84 STAC</span>
-    <span class="ox-pill">MobileSAM</span>
-    <span class="ox-pill">SRTM 30m</span>
-    <span class="ox-pill">deck.gl 3D</span>
-    <span class="ox-pill">Near Real-Time</span>
+  <div class="tg-stack">
+    <span class="tg-pill">Sentinel-2 L2A</span>
+    <span class="tg-pill">Element84 STAC</span>
+    <span class="tg-pill">MobileSAM</span>
+    <span class="tg-pill">SRTM 30m</span>
+    <span class="tg-pill">deck.gl 3D</span>
+    <span class="tg-pill">ICEYE SAR</span>
+    <span class="tg-pill">Near Real-Time</span>
   </div>
 
-  <div class="ox-cta">← Select an AOI in the sidebar and click Run Analysis to begin</div>
+  <div class="tg-cta">← Select an AOI in the sidebar and click Run Analysis to begin</div>
 </div>
 """, unsafe_allow_html=True)
 
