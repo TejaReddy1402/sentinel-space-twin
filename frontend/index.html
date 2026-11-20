@@ -547,6 +547,7 @@ function renderSummary(data){
   renderRecord(data);
   renderVisibility(data);
   document.getElementById('vlmPacket').textContent=JSON.stringify(data.vlm_packet,null,2);
+  setTimeout(() => fetchSegments(data).catch(() => {}), 0);
 }
 
 function renderSceneList(scenes){
@@ -990,15 +991,6 @@ function _renderSegments(segData) {
     <div style="margin-top:12px;font-size:10px;color:var(--muted)">Click <b>3D Map</b> on the map to view segments extruded by land-cover height.</div>`;
 }
 
-/* Hook fetchSegments into the main run() pipeline (fire-and-forget) */
-const _origRun = run;
-// Override renderSummary to also kick off segmentation after each analysis
-const _origRenderSummary = renderSummary;
-function renderSummary(data) {
-  _origRenderSummary(data);
-  // Kick off segmentation asynchronously; don't block the UI
-  setTimeout(() => fetchSegments(data).catch(() => {}), 0);
-}
 
 </script>
 </body>
