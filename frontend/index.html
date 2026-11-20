@@ -594,6 +594,7 @@ async function run(){
     drawResult(data);
     renderSummary(data);
     loadConstellations(data.aoi.bbox, data.aoi.name+' ('+data.aoi.code+')');
+    updateLocationSections(data);
   }catch(e){
     err.classList.add('on');err.textContent='Analysis failed: '+e.message;
   }finally{load.classList.remove('on');btn.disabled=false}
@@ -856,6 +857,76 @@ document.querySelectorAll('.ctl-fb').forEach(btn=>{
 });
 
 loadConstellations(null, 'AOI-07, next 24 h');
+
+/* ---- Location-aware section updates ---- */
+function updateLocationSections(data) {
+  const name = data.aoi?.name || '';
+  const code = data.aoi?.code || '';
+  const bbox = data.aoi?.bbox || [];
+  const lc = name.toLowerCase();
+
+  // Detect location type from name
+  const isMaritime  = /port|harbor|harbour|bay|strait|canal|dock|terminal|anchorage|shipping/.test(lc);
+  const isAviation  = /airport|airfield|heathrow|changi|cdg|jfk|airbase/.test(lc);
+  const isEnergy    = /refinery|oil|lng|gas|petrochemical|pipeline/.test(lc);
+  const isMining    = /mine|mining|quarry|mineral/.test(lc);
+  const isRenewable = /solar|wind|farm/.test(lc);
+  const isUrban     = /city|downtown|district|urban|cbd/.test(lc);
+
+  // Update maritime section title with current location
+  const marTitle = document.querySelector('#maritime .sec-title');
+  if (marTitle) marTitle.textContent = `Vessel tracking near ${name}`;
+
+  // Update AIS feed header
+  const aisLabel = document.querySelector('.ais-label');
+  if (aisLabel) aisLabel.textContent = `AIS feed — ${name} region`;
+
+  // Re-render industries with relevant sector highlighted
+  const indEl = document.getElementById('indGrid');
+  if (!indEl || !indEl.children.length) return;
+
+  // Relevance scoring per industry
+  const scores = {
+    'Maritime & Trade':       isMaritime ? 3 : 1,
+    'Aviation Security':      isAviation ? 3 : 0,
+    'Energy & Industrial':    isEnergy   ? 3 : 1,
+    'Mineral Extraction':     isMining   ? 3 : 0,
+    'Energy & Utilities':     isEnergy || isUrban ? 2 : 1,
+    'Real Estate & Commercial': isUrban  ? 2 : 1,
+    'Transport & Rail':       1,
+    'Renewables':             isRenewable ? 3 : 1,
+    'Water':                  1,
+  };
+
+  // Add a "monitoring" banner above industries
+  const indSection = document.getElementById('industries');
+  let banner = document.getElementById('ind-location-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'ind-location-banner';
+    banner.style.cssText = 'margin-bottom:14px;padding:10px 14px;background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.2);border-radius:9px;font-size:12px;color:var(--acc)';
+    indSection.querySelector('.wrap') ? indSection.querySelector('.wrap').prepend(banner) : indSection.appendChild(banner);
+    // insert after sec-hdr
+    const hdr = indSection.querySelector('.sec-hdr');
+    if (hdr) hdr.after(banner);
+  }
+  const topSector = Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
+  banner.textContent = `Active AOI: ${name} (${code}) — primary sector: ${topSector}`;
+
+  // Re-sort and re-render industry cards with highlight
+  const indCards = Array.from(indEl.querySelectorAll('.ind-c'));
+  const indData = indCards.map(c => ({
+    el: c,
+    cat: c.querySelector('.ind-cat')?.textContent || '',
+  }));
+  indData.sort((a,b) => (scores[b.cat]||0) - (scores[a.cat]||0));
+  indData.forEach(({el, cat}) => {
+    const score = scores[cat] || 0;
+    el.style.borderColor = score >= 3 ? 'rgba(14,165,233,.5)' : score >= 2 ? 'rgba(245,182,76,.3)' : '';
+    el.style.background  = score >= 3 ? 'rgba(14,165,233,.07)' : '';
+    indEl.appendChild(el);
+  });
+}
 
 /* ---- Maritime AIS ---- */
 async function loadMaritime(){
