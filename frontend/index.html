@@ -456,12 +456,12 @@ button{font-family:inherit;cursor:pointer}
 
 <script>
 const API = (() => {
-  // Injected at deploy time by vercel.json or server config
+  // Injected at deploy time
   if (window.__TERRAINGRID_API__) return window.__TERRAINGRID_API__;
-  // Local dev: direct backend
+  // Local dev
   if (window.location.hostname === 'localhost') return 'http://localhost:8787';
-  // Production Vercel: requests proxied via /api/* rewrite → no prefix needed
-  return '';
+  // Production: call Render directly — Vercel proxy times out on slow endpoints
+  return 'https://sentinel-space-twin.onrender.com';
 })();
 
 /* ---- Clock ---- */
