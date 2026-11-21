@@ -53,7 +53,6 @@ _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"https://terraingrid.*\.vercel\.app",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
