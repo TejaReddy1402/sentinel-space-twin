@@ -17,7 +17,7 @@ RECENCY_PENALTY_PER_RANK = 0.075
 RECENCY_FLOOR = 0.15
 
 # --- Change detection ---
-CHANGE_GRID_CELLS = 8               # NxN grid for change heatmap
+CHANGE_GRID_CELLS = 20              # NxN grid for change heatmap
 CHANGE_THRESHOLD = 0.38             # hot-pixel threshold (0–1 normalised diff)
 CHANGE_SCORE_MEAN_WEIGHT = 0.65
 CHANGE_SCORE_HOT_WEIGHT = 0.35

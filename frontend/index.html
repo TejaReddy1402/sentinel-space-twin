@@ -532,7 +532,10 @@ function drawResult(data){
   const geo=[];
   for(const s of[data.selected.latest,data.selected.previous])if(s?.geometry)geo.push({type:'Feature',properties:{id:s.id},geometry:s.geometry});
   sceneLayer=L.geoJSON({type:'FeatureCollection',features:geo},{style:{color:'#10d9a0',weight:1.5,fill:false}}).addTo(map);
-  changeLayer=L.geoJSON(data.change?.geojson,{style:f=>({color:'#f5b64c',fillColor:'#f5b64c',weight:1,fillOpacity:Math.min(.65,.2+(f.properties.change_score||0)*.7)})}).addTo(map);
+  changeLayer=L.geoJSON(data.change?.geojson,{style:f=>{
+    const s=f.properties.change_score||0;
+    return{color:'#f5b64c',weight:1,fillColor:'#f5b64c',fillOpacity:Math.min(.35,s*.5+.06)};
+  }}).addTo(map);
   map.fitBounds(bb(b),{padding:[40,40]});
   document.getElementById('mapTitle').textContent=data.aoi.name+' ('+data.aoi.code+')';
   document.getElementById('mapDesc').textContent=data.scene_count+' scenes found. '+(data.change.summary||'');
