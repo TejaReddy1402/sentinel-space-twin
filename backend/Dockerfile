@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code — always runs fresh (no layer caching for app/)
+# Increment the number below to bust Docker registry cache for app/
+RUN echo "app-layer-v4"
 COPY app ./app
 COPY static ./static
 
