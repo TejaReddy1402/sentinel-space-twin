@@ -513,7 +513,15 @@ const presets={
 (function initPresets(){
   const sel=document.getElementById('preset');
   sel.innerHTML=Object.entries(presets).map(([k,p])=>`<option value="${k}">${p.name}</option>`).join('');
-  sel.addEventListener('change',()=>{document.getElementById('bbox').value=presets[sel.value].bbox.join(',')});
+  sel.addEventListener('change', () => {
+    const p = presets[sel.value];
+    document.getElementById('bbox').value = p.bbox.join(',');
+    document.getElementById('locSearch').value = '';
+    if (aoiLayer) map.removeLayer(aoiLayer);
+    aoiLayer = L.rectangle(bb(p.bbox), {color:'#0ea5e9',weight:2,fill:false}).addTo(map);
+    map.fitBounds(bb(p.bbox));
+    _refreshLocationContent(p.name, '', p.bbox);
+  });
   document.getElementById('bbox').value=presets.rotterdam_port.bbox.join(',');
   const b=presets.rotterdam_port.bbox;
   aoiLayer=L.rectangle(bb(b),{color:'#0ea5e9',weight:2,fill:false}).addTo(map);
