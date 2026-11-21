@@ -582,7 +582,8 @@ async function run(){
   err.classList.remove('on');load.classList.add('on');btn.disabled=true;
   try{
     const pKey=document.getElementById('preset').value;
-    const pName=presets[pKey]?.name||'Custom AOI';
+    const searchedName=document.getElementById('locSearch').value.trim();
+    const pName=searchedName||presets[pKey]?.name||'Custom AOI';
     const bbox=document.getElementById('bbox').value.split(',').map(x=>Number(x.trim()));
     if(bbox.length!==4||bbox.some(Number.isNaN))throw new Error('BBox must be 4 comma-separated numbers.');
     const [minLon, minLat, maxLon, maxLat] = bbox;

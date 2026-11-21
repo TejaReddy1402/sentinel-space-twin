@@ -8,4 +8,5 @@ numpy==2.2.1
 python-multipart==0.0.20
 shapely==2.0.6
 scikit-image>=0.21.0
+huggingface_hub>=0.20.0
 # Optional higher-quality SAM: pip install mobile-sam torch torchvision

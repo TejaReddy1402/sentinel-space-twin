@@ -48,7 +48,7 @@ async def fetch_image(url: str) -> Image.Image | None:
             res = await client.get(url)
             res.raise_for_status()
             return Image.open(io.BytesIO(res.content)).convert("RGB")
-    except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+    except Exception as exc:
         logger.warning("Failed to fetch image %s: %s", url, exc)
         return None
 
