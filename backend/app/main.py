@@ -12,8 +12,10 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from .config import settings
 from .constellations import CONSTELLATION_DEFS, INDUSTRIES, collection_windows_for_aoi
@@ -47,16 +49,25 @@ app = FastAPI(
     ),
 )
 
-# CORS: allow Vercel preview/production domains and local dev.
-# CORS_ORIGINS env var is a plain comma-separated string (e.g. "https://foo.vercel.app,*")
-_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()] or ["*"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
+    "Access-Control-Max-Age": "600",
+}
+
+
+class _CORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            return Response(status_code=200, headers=_CORS_HEADERS)
+        response = await call_next(request)
+        for k, v in _CORS_HEADERS.items():
+            response.headers[k] = v
+        return response
+
+
+app.add_middleware(_CORSMiddleware)
 
 # Static files (generated change-preview images)
 _static_dir = Path(__file__).parent.parent / "static"
