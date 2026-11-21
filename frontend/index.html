@@ -414,14 +414,14 @@ button{font-family:inherit;cursor:pointer}
     </div>
   </section>
 
-  <!-- ============ MARITIME AIS ============ -->
+  <!-- ============ MARITIME / TRAFFIC AIS ============ -->
   <section id="maritime">
     <div class="sec-hdr">
-      <span class="sec-label">Maritime AIS</span>
-      <span class="sec-title">Vessel tracking &amp; maritime domain awareness</span>
+      <span class="sec-label" id="marSectionLabel">Maritime AIS</span>
+      <span class="sec-title" id="marSectionTitle">Vessel tracking &amp; maritime domain awareness</span>
     </div>
     <div class="mar-layout">
-      <div class="mar-feats">
+      <div class="mar-feats" id="marFeats">
         <div class="mf">Maritime domain awareness — live AIS identity, speed, course and route</div>
         <div class="mf">Vessels detected and tracked in satellite imagery</div>
         <div class="mf">Port, anchorage and chokepoint monitoring</div>
@@ -865,6 +865,17 @@ loadConstellations(null, 'AOI-07, next 24 h');
    Generates vessels, industries and context specific to the AOI.
    ================================================================ */
 
+// Non-maritime traffic feeds (airports, energy sites)
+const _AIRTRAFFIC_DB = {
+  airport: [
+    {name:'BA0117 · B777',    id:'BAW117',  speed:'520 kn',course:'270°',status:'Airborne',   type:'Long-haul'},
+    {name:'EK007 · A380',     id:'UAE007',  speed:'0 kn',  course:'090°',status:'At gate',    type:'Long-haul'},
+    {name:'VS023 · A350',     id:'VIR023',  speed:'485 kn',course:'315°',status:'Airborne',   type:'Long-haul'},
+    {name:'FR1234 · B737',    id:'RYR1234', speed:'0 kn',  course:'000°',status:'Boarding',   type:'Short-haul'},
+    {name:'LH902 · A320',     id:'DLH902',  speed:'440 kn',course:'090°',status:'Airborne',   type:'Short-haul'},
+  ],
+};
+
 const _VESSEL_DB = {
   northwest_europe: [
     {name:'MSC ROTTERDAM',   mmsi:'244650001',speed:'11.2 kn',course:'090°',status:'Underway',  type:'Container'},
@@ -1013,24 +1024,54 @@ function _refreshLocationContent(name, code, bbox) {
   const vessels = _VESSEL_DB[region] || _VESSEL_DB.default;
   const industries = _INDUSTRY_DB[sector] || _INDUSTRY_DB.default;
 
-  // --- Update maritime section ---
-  const marTitle = document.querySelector('#maritime .sec-title');
-  if (marTitle) marTitle.textContent = `Vessel tracking — ${name} region`;
+  // --- Update maritime / traffic section ---
+  const isAirport = sector === 'airport';
+  const sectionLabel = document.getElementById('marSectionLabel');
+  const sectionTitle = document.getElementById('marSectionTitle');
+  const marFeats     = document.getElementById('marFeats');
+  const aisLabel     = document.querySelector('.ais-label');
+  const aisNote      = document.querySelector('.ais-note');
 
-  const aisLabel = document.querySelector('.ais-label');
-  if (aisLabel) aisLabel.textContent = `AIS feed — ${name}`;
-
-  const aisNote = document.querySelector('.ais-note');
-  if (aisNote) aisNote.textContent = `Illustrative vessel data for ${name} (${region.replace(/_/g,' ')}). Live AIS requires MarineTraffic or Spire API integration.`;
-
-  document.getElementById('aisVessels').innerHTML = vessels.map(v => `
-    <div class="ais-vessel">
-      <div>
-        <div class="ais-name">${v.name}</div>
-        <div class="ais-det">MMSI ${v.mmsi} · ${v.type} · ${v.speed} · ${v.course}</div>
-      </div>
-      <div class="ais-sts ${v.status==='At anchor'||v.status==='Moored'||v.status==='Anchored'||v.status==='Waiting'||v.status==='At berth'?'amb':''}">${v.status}</div>
-    </div>`).join('');
+  if (isAirport) {
+    if (sectionLabel) sectionLabel.textContent = 'Air Traffic';
+    if (sectionTitle) sectionTitle.textContent = `Flight tracking & ground movement — ${name}`;
+    if (marFeats) marFeats.innerHTML = `
+      <div class="mf">ADS-B aircraft identification, altitude, speed and heading</div>
+      <div class="mf">Runway occupancy and taxiway movement detection</div>
+      <div class="mf">Gate and stand occupancy from satellite imagery</div>
+      <div class="mf">Cargo ramp activity and freight volume estimation</div>
+      <div class="mf">Perimeter security and vehicle airside access monitoring</div>`;
+    if (aisLabel) aisLabel.textContent = `ADS-B feed — ${name}`;
+    if (aisNote)  aisNote.textContent  = `Illustrative flight data for ${name}. Live ADS-B requires integration with FlightAware, FlightRadar24 or OpenSky Network.`;
+    const flights = _AIRTRAFFIC_DB.airport;
+    document.getElementById('aisVessels').innerHTML = flights.map(f => `
+      <div class="ais-vessel">
+        <div>
+          <div class="ais-name">${f.name}</div>
+          <div class="ais-det">Flight ${f.id} · ${f.type} · ${f.speed} · hdg ${f.course}</div>
+        </div>
+        <div class="ais-sts ${f.status==='At gate'||f.status==='Boarding'?'amb':''}">${f.status}</div>
+      </div>`).join('');
+  } else {
+    if (sectionLabel) sectionLabel.textContent = 'Maritime AIS';
+    if (sectionTitle) sectionTitle.textContent = `Vessel tracking — ${name} region`;
+    if (marFeats) marFeats.innerHTML = `
+      <div class="mf">Maritime domain awareness — live AIS identity, speed, course and route</div>
+      <div class="mf">Vessels detected and tracked in satellite imagery</div>
+      <div class="mf">Port, anchorage and chokepoint monitoring</div>
+      <div class="mf">Alerts for high-risk corridors and supply-chain disruption</div>
+      <div class="mf">Dark vessel detection via SAR when AIS is switched off</div>`;
+    if (aisLabel) aisLabel.textContent = `AIS feed — ${name}`;
+    if (aisNote)  aisNote.textContent  = `Illustrative vessel data for ${name} (${region.replace(/_/g,' ')}). Live AIS requires MarineTraffic or Spire API integration.`;
+    document.getElementById('aisVessels').innerHTML = vessels.map(v => `
+      <div class="ais-vessel">
+        <div>
+          <div class="ais-name">${v.name}</div>
+          <div class="ais-det">MMSI ${v.mmsi} · ${v.type} · ${v.speed} · ${v.course}</div>
+        </div>
+        <div class="ais-sts ${['At anchor','Moored','Anchored','Waiting','At berth'].includes(v.status)?'amb':''}">${v.status}</div>
+      </div>`).join('');
+  }
 
   // --- Update industries section ---
   const indEl = document.getElementById('indGrid');

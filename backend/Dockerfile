@@ -7,14 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-# CACHEBUST forces a fresh copy of app code on every deploy
-ARG CACHEBUST=1
+
+# Copy app code — always runs fresh (no layer caching for app/)
 COPY app ./app
 COPY static ./static
 
 RUN adduser --disabled-password --gecos '' appuser
 
-# PORT is injected by Railway; default to 8787 for local/docker-compose
+# PORT is injected by Railway/Render; default to 8787 for local dev
 ENV PORT=8787
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
