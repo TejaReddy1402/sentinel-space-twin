@@ -16,7 +16,10 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 _MODELS_DIR = Path(__file__).parent.parent / "models"
-_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    _MODELS_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass  # read-only filesystem in container; MobileSAM unavailable, SLIC fallback used
 
 # ── land-cover height + colour ──────────────────────────────────────────────
 

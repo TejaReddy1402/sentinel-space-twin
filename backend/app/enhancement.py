@@ -29,7 +29,10 @@ from .constants import (
 logger = logging.getLogger(__name__)
 
 JOBS_DIR = Path(__file__).parent.parent / "static" / "jobs"
-JOBS_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 
 
 def pick_thumbnail(scene: dict[str, Any]) -> str | None:

@@ -13,9 +13,7 @@ from typing import Any
 import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .config import settings
 from .constellations import CONSTELLATION_DEFS, INDUSTRIES, collection_windows_for_aoi
@@ -49,22 +47,50 @@ app = FastAPI(
     ),
 )
 
-_CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
-    "Access-Control-Max-Age": "600",
-}
+_CORS_HEADERS: list[tuple[bytes, bytes]] = [
+    (b"access-control-allow-origin", b"*"),
+    (b"access-control-allow-methods", b"GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"),
+    (b"access-control-allow-headers", b"Content-Type, Authorization, Accept"),
+    (b"access-control-max-age", b"600"),
+]
 
 
-class _CORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if request.method == "OPTIONS":
-            return Response(status_code=200, headers=_CORS_HEADERS)
-        response = await call_next(request)
-        for k, v in _CORS_HEADERS.items():
-            response.headers[k] = v
-        return response
+class _CORSMiddleware:
+    """Pure ASGI CORS middleware — injects headers at the protocol level.
+
+    BaseHTTPMiddleware has a known bug where exceptions from the inner app
+    can escape the middleware stack without CORS headers being applied.
+    Operating at the ASGI send level avoids that entirely.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        if scope["method"] == "OPTIONS":
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": _CORS_HEADERS + [(b"content-length", b"0")],
+            })
+            await send({"type": "http.response.body", "body": b""})
+            return
+
+        async def _send_with_cors(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                existing = {h[0] for h in headers}
+                for key, val in _CORS_HEADERS:
+                    if key not in existing:
+                        headers.append((key, val))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, _send_with_cors)
 
 
 app.add_middleware(_CORSMiddleware)
