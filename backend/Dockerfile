@@ -1,15 +1,13 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libjpeg-dev zlib1g-dev curl wget \
+    libjpeg-dev zlib1g-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Increment the number below to bust Docker registry cache for app/
-RUN echo "app-layer-v4"
 COPY app ./app
 COPY static ./static
 
