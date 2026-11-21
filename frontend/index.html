@@ -62,7 +62,7 @@ button{font-family:inherit;cursor:pointer}
 
 /* Controls panel */
 .dp{background:rgba(5,15,30,.97);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden}
-.dp-inn{padding:16px;height:100%;overflow-y:auto;max-height:680px}
+.dp-inn{padding:16px;overflow-y:auto}
 .dp-t{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--bdr)}
 .dp-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
 .dp-sel,.dp-inp{width:100%;background:rgba(4,12,24,.8);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;font-family:inherit}
@@ -205,6 +205,32 @@ button{font-family:inherit;cursor:pointer}
 .seg-tip{margin-top:12px;padding:8px;background:rgba(245,182,76,.07);border:1px solid rgba(245,182,76,.2);border-radius:6px;font-size:10px;color:var(--amb);line-height:1.5}
 /* ---- FOOTER ---- */
 .footer{border-top:1px solid var(--bdr);padding:20px;text-align:center;font-size:11px;color:var(--muted)}
+
+/* ---- RESPONSIVE ---- */
+@media(max-width:1200px){
+  .dashboard{grid-template-columns:280px minmax(0,1fr) 340px}
+  .con-cards{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:960px){
+  .dashboard{grid-template-columns:1fr;gap:10px}
+  .dash-map{order:1}
+  .dp{order:0}
+  .dash-r{order:2}
+  #map{min-height:400px}
+  .con-cards{grid-template-columns:repeat(2,1fr)}
+  .mar-layout{grid-template-columns:1fr}
+  .ind-grid{grid-template-columns:repeat(2,1fr)}
+  .con-metrics{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:600px){
+  .nav-links{display:none}
+  .con-cards{grid-template-columns:1fr 1fr}
+  .ind-grid{grid-template-columns:1fr 1fr}
+  .dp-g2{grid-template-columns:1fr}
+  .pg-badges{gap:5px}
+  .wrap{padding:0 12px 40px}
+  .pg-hdr{padding:14px 12px 0}
+}
 </style>
 </head>
 <body>
@@ -351,9 +377,9 @@ button{font-family:inherit;cursor:pointer}
           <div id="tab-vlm" class="dtc">
             <div class="dst">AI Analysis Prompt</div>
             <div id="vlmSummary" style="color:var(--muted);font-size:11px;margin-bottom:10px;line-height:1.6">Run analysis to generate an AI-ready prompt for this scene.</div>
-            <div id="vlmActions" style="display:none;margin-bottom:10px;display:none;gap:8px;flex-wrap:wrap">
-              <button onclick="copyVlmPrompt()" style="background:var(--acc);border:none;color:#000;font-weight:700;font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer">Copy AI Prompt</button>
-              <button onclick="toggleVlmJson()" style="background:var(--sur2);border:1px solid var(--bdr);color:var(--txt2);font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer">Show Raw JSON</button>
+            <div id="vlmActions" style="display:none;margin-bottom:10px;gap:8px;flex-wrap:wrap">
+              <button onclick="copyVlmPrompt(event)" style="background:var(--acc);border:none;color:#000;font-weight:700;font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer">Copy AI Prompt</button>
+              <button onclick="toggleVlmJson(event)" style="background:var(--sur2);border:1px solid var(--bdr);color:var(--txt2);font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer">Show Raw JSON</button>
             </div>
             <div id="vlmJson" style="display:none"><div id="vlmPacket" class="code-blk" style="font-size:10px;max-height:300px;overflow-y:auto"></div></div>
           </div>
@@ -464,12 +490,22 @@ const API = (() => {
   return 'https://sentinel-space-twin.onrender.com';
 })();
 
-/* ---- Clock ---- */
+/* ---- Clock + live NOW marker ---- */
 function tickClock(){
-  const s=new Date().toUTCString().split(' ')[4];
+  const now=new Date();
+  const s=now.toUTCString().split(' ')[4];
   document.getElementById('navClock').textContent=s;
   const f=document.getElementById('footClock');
   if(f)f.textContent=s;
+  // Keep the NOW marker and time metric in sync with the clock
+  const nowHour=now.getUTCHours()+now.getUTCMinutes()/60;
+  const nowPct=(nowHour/24)*100;
+  const nowLine=document.querySelector('.tl-now');
+  if(nowLine)nowLine.style.left=nowPct+'%';
+  const nowLbl=document.getElementById('tlNowLbl');
+  if(nowLbl)nowLbl.style.left=nowPct+'%';
+  const cmNow=document.getElementById('cmNow');
+  if(cmNow)cmNow.textContent=now.getUTCHours().toString().padStart(2,'0')+':'+now.getUTCMinutes().toString().padStart(2,'0');
 }
 setInterval(tickClock,1000);
 tickClock();
@@ -612,13 +648,16 @@ async function run(){
 }
 document.getElementById('runBtn').addEventListener('click',run);
 
+function _fmtStatus(s){return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}
+function _cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s}
+
 function renderSummary(data){
   document.getElementById('sceneCount').textContent=data.scene_count;
   const lat=data.selected.latest;
   const bs=document.getElementById('bestScore');
   bs.textContent=lat?lat.quality_score:'—';
   bs.className='v '+(lat?'score-'+lat.quality_label:'');
-  document.getElementById('changeStatus').textContent=data.change.status+' — '+(data.change.geojson?.features?.length||0)+' cells';
+  document.getElementById('changeStatus').textContent=_fmtStatus(data.change.status)+' — '+(data.change.geojson?.features?.length||0)+' cells';
   document.getElementById('aoiCode').textContent=data.aoi?.code||'—';
   renderSceneList(data.scenes);
   renderEvidence(data);
@@ -634,7 +673,7 @@ function renderSceneList(scenes){
   el.innerHTML=scenes.map(s=>`
     <div class="sc-row">
       ${pickThumb(s)?`<img class="sc-thumb" src="${pickThumb(s)}" referrerpolicy="no-referrer" alt="Scene ${s.id}"/>`:'<div class="sc-thumb"></div>'}
-      <div><div class="sc-date">${fmtDate(s.datetime)}</div><div class="sc-sub">${s.platform||'sentinel'} · ${s.quality_label}</div></div>
+      <div><div class="sc-date">${fmtDate(s.datetime)}</div><div class="sc-sub">${s.platform||'sentinel'} · ${_cap(s.quality_label)}</div></div>
       <div class="sc-cld">${Number(s.cloud_cover??0).toFixed(1)}%<br><span class="score-${s.quality_label}">${s.quality_score}</span></div>
     </div>`).join('');
 }
@@ -774,27 +813,26 @@ function renderVlm(packet, data) {
   if (jsonEl) jsonEl.textContent = JSON.stringify(packet, null, 2);
 }
 
-function copyVlmPrompt() {
+function copyVlmPrompt(evt) {
   if (!_vlmPacketData) return;
   const text = `${_vlmPacketData.prompt}\n\nLatest thumbnail: ${_vlmPacketData.inputs?.latest_thumbnail || ''}\nPrevious thumbnail: ${_vlmPacketData.inputs?.previous_thumbnail || ''}\n\nRules:\n${(_vlmPacketData.rules || []).map((r,i) => `${i+1}. ${r}`).join('\n')}`;
+  const btn = evt.currentTarget;
+  const orig = btn.textContent;
   navigator.clipboard.writeText(text).then(() => {
-    const btn = event.target;
-    const orig = btn.textContent;
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = orig; }, 1800);
+  }).catch(() => {
+    btn.textContent = 'Copy failed';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
   });
 }
 
-function toggleVlmJson() {
+function toggleVlmJson(evt) {
   const el = document.getElementById('vlmJson');
-  const btn = event.target;
-  if (el.style.display === 'none' || !el.style.display) {
-    el.style.display = 'block';
-    btn.textContent = 'Hide Raw JSON';
-  } else {
-    el.style.display = 'none';
-    btn.textContent = 'Show Raw JSON';
-  }
+  const btn = evt.currentTarget;
+  const hidden = el.style.display === 'none' || !el.style.display;
+  el.style.display = hidden ? 'block' : 'none';
+  btn.textContent = hidden ? 'Hide Raw JSON' : 'Show Raw JSON';
 }
 
 /* ---- Tab switching ---- */
@@ -843,9 +881,6 @@ function renderTimeline(){
   const nowHour=now.getUTCHours()+now.getUTCMinutes()/60;
   const nowPct=(nowHour/24)*100;
   bar.innerHTML=`<div class="tl-now" style="left:${nowPct}%"></div>`;
-  const lbl=document.getElementById('tlNowLbl');
-  if(lbl){lbl.style.left=nowPct+'%'}
-  document.getElementById('cmNow').textContent=now.getUTCHours().toString().padStart(2,'0')+':'+now.getUTCMinutes().toString().padStart(2,'0');
   const wins=activeFilter==='all'?allWindows:allWindows.filter(w=>w.constellation_id===activeFilter);
   wins.forEach(w=>{
     const pct=(w.hour_of_day/24)*100;
