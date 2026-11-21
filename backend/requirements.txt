@@ -10,4 +10,4 @@ shapely==2.0.6
 scikit-image>=0.21.0
 huggingface_hub>=0.20.0
 # Optional higher-quality SAM: pip install mobile-sam torch torchvision
-# cache-bust: 3
+# cache-bust: 4
